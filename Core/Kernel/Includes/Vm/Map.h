@@ -6,6 +6,7 @@
 
 #include <Init.h>
 #include <Runtime/RefCountable.h>
+#include <Vm/Types.h>
 #include <platform/PageTable.h>
 
 namespace Kernel::Vm {
@@ -27,6 +28,10 @@ class MapEntry;
  *
  * 1. The first map that is created is automatically registered as the kernel's memory map. This
  *    means that any subsequently created maps will have this map as its "parent."
+ *
+ *    This behavior isn't set up until the kernel entry point is invoked (that's where the parent
+ *    map is set up) so this caveat does not apply to early platform/arch init code; though that
+ *    code should really only ever be creating one instance (the initial kernel map) anyways.
  */
 class Map: public Runtime::RefCountable<Map> {
     friend class MapEntry;
@@ -35,20 +40,43 @@ class Map: public Runtime::RefCountable<Map> {
 
     public:
         Map(Map *parent = nullptr);
+        ~Map();
 
         void activate();
 
         [[nodiscard]] int add(const uintptr_t base, MapEntry *entry);
+        [[nodiscard]] int remove(MapEntry *entry);
 
-    protected:
-        ~Map() = delete;
+        [[nodiscard]] int getEntryAt(const uintptr_t vaddr, MapEntry* &outEntry);
+
+        /**
+         * @brief Get currently active map
+         *
+         * Retrieve the map that's currently mapped on the calling processor. This information
+         * is retrieved from the processor's local storage.
+         *
+         * @return Map object currently active, if any
+         */
+        inline static Map *Current() {
+            // TODO: implement :)
+            return nullptr;
+        }
+
+    private:
+        void deactivate();
+
+        int findEntry(MapEntry *entry, uintptr_t &outVirtBase);
+        int invalidateTlb(const uintptr_t virtualAddr, const size_t length,
+                const TlbInvalidateHint hints);
+        int doTlbShootdown(const uintptr_t virtualAddr, const size_t length,
+                const TlbInvalidateHint hints);
 
     private:
         /// Map object for the kernel map
         static Map *gKernelMap;
 
         /**
-         * Parent map
+         * @brief Parent map
          *
          * The parent map is used for the kernel space mappings, if the platform has a concept of
          * separate kernel and userspace address spaces.
@@ -56,7 +84,15 @@ class Map: public Runtime::RefCountable<Map> {
         Map *parent{nullptr};
 
         /**
-         * Platform page table instance
+         * @brief Bitmap for active processors
+         *
+         * Indicates which processors currently have this mapped. This is used to send TLB
+         * shootdowns to other processors.
+         */
+        uint64_t mappedCpus{0};
+
+        /**
+         * @brief Platform page table instance
          *
          * This is the platform-specific wrapper to actually write out page tables, which can be
          * understood by the processor. Whenever a VM object wishes to change the page mappings, it

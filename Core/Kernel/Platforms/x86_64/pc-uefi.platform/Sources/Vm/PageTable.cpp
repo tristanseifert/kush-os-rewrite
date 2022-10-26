@@ -177,6 +177,7 @@ int PageTable::mapPage(const uint64_t phys, const uintptr_t _virt, const Kernel:
             Console::Trace("Allocated %s: %016llx", "PDPT", entry);
         }
 
+        // TODO: do we need INVLPG? changing present 0 -> 1 does not require (Intel 4.10.4.3)
         // TODO: broadcast PML4 update to other maps that map the kernel map
     }
 
@@ -206,6 +207,8 @@ int PageTable::mapPage(const uint64_t phys, const uintptr_t _virt, const Kernel:
         if(kLogAlloc) {
             Console::Trace("Allocated %s: %016llx", "PDT", entry);
         }
+
+        // TODO: do we need INVLPG? changing present 0 -> 1 does not require (Intel 4.10.4.3)
     } else if(pdpte & (1 << 7)) { // present, 1G page
         // TODO: error code enum
         return -1002;
@@ -236,6 +239,7 @@ int PageTable::mapPage(const uint64_t phys, const uintptr_t _virt, const Kernel:
         if(kLogAlloc) {
             Console::Trace("Allocated %s: %016llx", "PT", entry);
         }
+        // TODO: do we need INVLPG? changing present 0 -> 1 does not require (Intel 4.10.4.3)
     } else if(pdte & (1 << 7)) { // present, 2M page
         // TODO: error code enum
         return -1003;
@@ -265,6 +269,27 @@ int PageTable::mapPage(const uint64_t phys, const uintptr_t _virt, const Kernel:
     }
 
     WriteTable(ptAddr, (virt >> 12) & 0x1FF, pte);
+    return 0;
+}
+
+
+
+/**
+ * @brief Invalidate a range of virtual memory
+ *
+ * Invalidate the TLB for all addresses in the specified range.
+ *
+ * @TODO Benchmark and optimize if this naiive approach is too slow
+ */
+int PageTable::invalidateTlb(const uintptr_t virt, const size_t length,
+        const Kernel::Vm::TlbInvalidateHint) {
+    const size_t numPages = NearestPageSize(length) / PageSize();
+
+    for(size_t i = 0; i < numPages; i++) {
+        const uintptr_t address = virt + (i * PageSize());
+        asm volatile("invlpg (%0)" : : "b"(address) : "memory");
+    }
+
     return 0;
 }
 
@@ -309,6 +334,7 @@ uint64_t PageTable::AllocPage() {
     REQUIRE(err == 1, "failed to allocate page: %d", err);
 
     // zeroize it
+    // TODO: physical allocator should zero memory for us!
     auto ptr = GetTableVmAddr(page);
     memset(ptr, 0, PageSize());
 

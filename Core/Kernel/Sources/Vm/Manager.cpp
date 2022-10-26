@@ -37,12 +37,30 @@ void Manager::Init() {
  * @param faultAddr Faulting virtual address
  */
 void Manager::HandleFault(Platform::ProcessorState &state, const uintptr_t faultAddr) {
-    // TODO: find the VM object and invoke its fault handler
+    int found;
+    MapEntry *entry{nullptr};
+
+    // check the map entry corresponding to this fault
+    auto vm = Map::Current();
+    if(vm) {
+        found = vm->getEntryAt(faultAddr, entry);
+        if(found == 1) {
+            // TODO: invoke handleFault()
+        } else if(found < 0) {
+            // TODO: this shouldn't happen (?)
+            PANIC("Map::getEntryAt failed: %d", found);
+        }
+    }
+
 
     // if the fault was caused by kernel code and is yet unhandled, abort
     if(state.getPc() >= Platform::KernelAddressLayout::KernelBoundary) {
         Exceptions::Handler::AbortWithException(Exceptions::Handler::ExceptionType::PageFault,
                 state, reinterpret_cast<void *>(faultAddr));
+    }
+    // otherwise, forward the fault to the task
+    else {
+        // TODO: implement
     }
 }
 

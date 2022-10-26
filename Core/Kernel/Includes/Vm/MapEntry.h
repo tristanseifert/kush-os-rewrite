@@ -84,6 +84,15 @@ class MapEntry: public Runtime::RefCountable<MapEntry> {
          */
         virtual void addedTo(const uintptr_t base, Map &map, Platform::PageTable &pt) = 0;
 
+        /**
+         * @brief Callback invoked when the map entry is about to be unmapped
+         *
+         * @param base Virtual base address of this object's mapping
+         * @param map VM map object that we're being unmapped from
+         * @param pt Page table backing the VM map
+         */
+        virtual void willRemoveFrom(const uintptr_t base, Map &map, Platform::PageTable &pt) = 0;
+
         ~MapEntry() = default;
 
     protected:

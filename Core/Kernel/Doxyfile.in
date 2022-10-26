@@ -25,7 +25,7 @@ DOT_TRANSPARENT         = YES
 
 # show source browser (file cross-reference) and embed source
 SOURCE_BROWSER          = YES
-INLINE_SOURCES          = YES
+INLINE_SOURCES          = NO
 
 ##########
 #use the special CSS

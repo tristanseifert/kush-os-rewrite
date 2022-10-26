@@ -16,6 +16,12 @@ class ContiguousPhysRegion: public MapEntry {
         ContiguousPhysRegion(const uint64_t physBase, const size_t length, const Mode mode);
 
         void addedTo(const uintptr_t base, Map &map, Platform::PageTable &pt) override;
+        void willRemoveFrom(const uintptr_t base, Map &map, Platform::PageTable &pt) override {
+            /*
+             * There's nothing to be done here, since the map object will ensure the page table
+             * entries for the entire range of the entry are cleared.
+             */
+        };
 
     private:
         /**

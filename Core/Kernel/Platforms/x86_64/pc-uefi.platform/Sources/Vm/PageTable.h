@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #include <Bitflags.h>
-#include <Vm/Manager.h>
+#include <Vm/Types.h>
 
 namespace Platform::Amd64Uefi {
 /**
@@ -53,6 +53,11 @@ ENUM_FLAGS_EX(PageFlags, uint64_t);
  * @brief A single PML4 and all its descendant page tables
  *
  * This class is used by the kernel VM manager to manipulate the underlying page tables.
+ *
+ * @remark Page table modifications made via this class do not automatically flush TLBs for any
+ *         purpose other than ensuring that page table modifications (i.e. when a new PTE is set up
+ *         and linked in) will use correct mappings.
+ * @remark Therefore, it is the caller's responsibility to make sure the TLBs are managed.
  */
 class PageTable {
     public:
@@ -84,6 +89,9 @@ class PageTable {
 
         int mapPage(const uint64_t phys, const uintptr_t virt,
                 const Kernel::Vm::Mode mode);
+
+        int invalidateTlb(const uintptr_t virt, const size_t length,
+                const Kernel::Vm::TlbInvalidateHint hints);
 
     private:
         void copyPml4Upper(PageTable *);

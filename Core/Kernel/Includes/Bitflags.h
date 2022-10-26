@@ -83,7 +83,6 @@ Use this line before header, if you don't want flags(T x) function to be impleme
 #endif
 
 #define ENUM_FLAGS_EX_NO_FLAGS_FUNC(T,IntType) \
-enum class T: IntType;	\
 __attribute__((__visibility__("hidden"))) inline T	operator	&	(T x, T y)		{	return static_cast<T>	(static_cast<IntType>(x) & static_cast<IntType>(y));	}; \
 __attribute__((__visibility__("hidden"))) inline T	operator	|	(T x, T y)		{	return static_cast<T>	(static_cast<IntType>(x) | static_cast<IntType>(y));	}; \
 __attribute__((__visibility__("hidden"))) inline T	operator	^	(T x, T y)		{	return static_cast<T>	(static_cast<IntType>(x) ^ static_cast<IntType>(y));	}; \
