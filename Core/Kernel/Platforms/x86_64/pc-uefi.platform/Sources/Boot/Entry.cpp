@@ -136,8 +136,16 @@ extern "C" void _osentry() {
         Backtrace::ParseKernelElf(ptr, gKernelImageVm->getLength());
     }
 
+    // TODO: stash away bookkeeping info for CPUs, so we can launch them later
+    auto cpuInfo = LimineRequests::gSmp.response;
+    if(cpuInfo) {
+        Kernel::Logging::Console::Notice("Total CPUs: %llu", cpuInfo->cpu_count);
+    } else {
+        Kernel::Logging::Console::Warning("no SMP info provided (forcing uniprocessor mode!)");
+    }
+
     // jump to the kernel's entry point now
-    Kernel::Start();
+    Kernel::Start(map);
     // we should never get here…
     PANIC("Kernel entry point returned!");
 }

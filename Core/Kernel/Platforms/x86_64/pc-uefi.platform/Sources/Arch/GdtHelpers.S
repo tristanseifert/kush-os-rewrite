@@ -19,7 +19,10 @@ _ZN8Platform9Amd64Uefi3Gdt5FlushEv:
     and         0b1111111111111111111111111111111111111111111111101011111011111111, %rax
     push        %rax*/
     pushq       $GDT_KERN_CODE_SEG
-    pushq       $1f
+
+    lea         1f(%rip), %rax
+    pushq       %rax
+    //pushq       $1f
     lretq
     //iretq
 

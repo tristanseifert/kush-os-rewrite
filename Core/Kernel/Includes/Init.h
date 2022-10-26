@@ -2,12 +2,16 @@
 #define KERNEL_INIT_H
 
 namespace Kernel {
+namespace Vm {
+class Map;
+}
+
 /**
- * Kernel entry point
+ * @brief Kernel entry point
  *
  * Jump here at the end of platform-specific initialization.
  */
-void Start();
+void Start(Kernel::Vm::Map *map);
 }
 
 #endif

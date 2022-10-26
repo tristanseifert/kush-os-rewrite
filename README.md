@@ -28,7 +28,7 @@ Build system is made with cmake, and tested to target the Ninja build system. Yo
 - x86, amd64: The [nasm](https://nasm.us) assembler is required.
 
 ## LLVM Toolchain
-You can use the `build_toolchain.sh` script to build a toolchain to use for compiling the system. It will pull a forked version of llvm (currently, at version 13) that can target kush.
+You can use the `build_toolchain.sh` script to build a toolchain to use for compiling the system. It will pull a forked version of llvm (currently, at version 13) that can target kush. If you'd rather build it yourself, [check out the forked llvm repo.](https://github.com/tristanseifert/kush-os-llvm/tree/dev/tseifert/kush-os)
 
 ## Documentation
 All code should be adequately commented, with Doxygen-style annotations to enable the automatic generation of API documentation.

@@ -47,6 +47,7 @@ REPOBASE=https://github.com/llvm
 #echo "Checking out llvm-project [$LLVM_REVISION]..."
 #echo "===================================================================="
 
+# TODO: Clone https://github.com/tristanseifert/kush-os-llvm.git dev/tseifert/kush-os
 #if [ ! -d sources/llvm-project ]; then
 #    git clone --depth 1 --shallow-submodules --no-tags -b $LLVM_REVISION $REPOBASE/llvm-project.git sources/llvm-project
 #else
@@ -59,7 +60,8 @@ echo "===================================================================="
 if [ ! -f build/llvm-project/.config.succeeded ]; then
     pushd build/llvm-project && \
     cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$TOOLCHAIN_DIR/llvm \
-        -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra;libcxx;libcxxabi;libunwind;lldb;compiler-rt;lld;polly" \
+        -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra;lldb;compiler-rt;lld;polly" \
+        -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi;libunwind" \
         -DLLVM_TARGETS_TO_BUILD=$LLVM_TARGETS \
         -DLLVM_USE_SPLIT_DWARF=True -DLLVM_OPTIMIZED_TABLEGEN=True \
         -DLLVM_BUILD_TESTS=False -DLLVM_INCLUDE_TESTS=False -DLLDB_INCLUDE_TESTS=False \
@@ -85,6 +87,13 @@ echo "===================================================================="
 #else
 #    echo "build/llvm-project/.build.succeeded exists, NOT rebuilding llvm!"
 #fi
+
+echo "===================================================================="
+echo "Building runtimes..."
+echo "===================================================================="
+pushd build/llvm-project && \
+cmake --build . --target cxx cxxabi unwind && \
+popd || exit 1
 
 echo "===================================================================="
 echo "Installing llvm and all tools..."

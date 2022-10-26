@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <Init.h>
 #include <Runtime/RefCountable.h>
 #include <platform/PageTable.h>
 
@@ -29,6 +30,8 @@ class MapEntry;
  */
 class Map: public Runtime::RefCountable<Map> {
     friend class MapEntry;
+    friend void ::Kernel::Start(Kernel::Vm::Map *);
+
 
     public:
         Map(Map *parent = nullptr);

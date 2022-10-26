@@ -25,6 +25,11 @@ struct LimineRequests {
     static limine_stack_size_request gStackSize;
 
     /**
+     * @brief Multiprocessor support (mandatory)
+     */
+    static limine_smp_request gSmp;
+
+    /**
      * @brief Higher half direct map (mandatory)
      */
     static limine_hhdm_request gHigherHalf;

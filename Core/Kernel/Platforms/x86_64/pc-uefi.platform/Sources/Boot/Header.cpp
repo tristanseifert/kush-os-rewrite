@@ -17,7 +17,7 @@ using namespace Platform::Amd64Uefi;
 /**
  * Size of the initialization stack
  */
-constexpr static const size_t kBootStackSize{8 * 1024};
+constexpr static const size_t kBootStackSize{16 * 1024};
 
 // Ignore warnings from unused tags.
 #pragma GCC diagnostic push
@@ -28,6 +28,14 @@ limine_stack_size_request LimineRequests::gStackSize{
     .revision   = 0,
     .response   = nullptr,
     .stack_size = kBootStackSize,
+};
+
+limine_smp_request LimineRequests::gSmp{
+    .id         = LIMINE_SMP_REQUEST,
+    .revision   = 0,
+    .response   = nullptr,
+    // bit 0: enable x2APIC (not _yet_ supported)
+    .flags      = (0 << 0),
 };
 
 limine_hhdm_request LimineRequests::gHigherHalf{
@@ -108,6 +116,7 @@ __attribute__((section(".limine_reqs"), used))
 static void *gLimineHeaders[] = {
     // required
     &LimineRequests::gStackSize,
+    &LimineRequests::gSmp,
     // &LimineRequests::gHigherHalf,
     &LimineRequests::gTerminal,
     &LimineRequests::gFramebuffer,
@@ -123,11 +132,3 @@ static void *gLimineHeaders[] = {
     // must be NULL terminated
     nullptr,
 };
-
-    // use ELF entry point
-    // .entry_point = 0,
-    /*
-     * Specify the bottom of the stack. This is only used for the boot processor, and even then,
-     * only until the scheduler is started.
-     */
-    // .stack = reinterpret_cast<uintptr_t>(gBspStack) + sizeof(gBspStack),
