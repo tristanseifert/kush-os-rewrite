@@ -75,6 +75,13 @@ class PageTable {
             return 4096;
         }
 
+        /**
+         * @brief Round up a size to the nearest page multiple
+         */
+        constexpr static inline size_t NearestPageSize(const size_t in) {
+            return in + (PageSize() - (in % PageSize()));
+        }
+
         int mapPage(const uint64_t phys, const uintptr_t virt,
                 const Kernel::Vm::Mode mode);
 

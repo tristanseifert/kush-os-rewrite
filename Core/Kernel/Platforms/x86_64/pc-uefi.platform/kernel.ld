@@ -21,9 +21,11 @@ SECTIONS {
         *(.text .text.*)
     } :text
     __kernel_text_end = .;
+    __kernel_text_size = SIZEOF(.text);
 
     /* Place the limine header into rodata */
     .limine_reqs : ALIGN(4K) {
+        __kernel_rodata_start = .;
         KEEP(*(.limine_reqs *.limine_reqs*));
     } :rodata
 
@@ -31,9 +33,12 @@ SECTIONS {
     .rodata : {
         *(.rodata .rodata.*)
     } :rodata
+    . = ALIGN(8);
+    __kernel_rodata_size = . - __kernel_rodata_start;
 
     /* kernel data (mutable) section */
     .data : ALIGN(4K) {
+        __kernel_data_start = .;
         *(*.data .data.*)
     } :data
 
@@ -42,6 +47,8 @@ SECTIONS {
         *(COMMON)
         *(.bss .bss.*)
     } :data
+    . = ALIGN(8);
+    __kernel_data_size = . - __kernel_data_start;
 
     /* discard some stuff */
     /DISCARD/ : {

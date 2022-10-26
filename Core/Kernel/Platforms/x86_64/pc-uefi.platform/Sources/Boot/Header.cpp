@@ -29,6 +29,13 @@ limine_stack_size_request LimineRequests::gStackSize{
     .response   = nullptr,
     .stack_size = kBootStackSize,
 };
+
+limine_hhdm_request LimineRequests::gHigherHalf{
+    .id         = LIMINE_HHDM_REQUEST,
+    .revision   = 0,
+    .response   = nullptr,
+};
+
 limine_terminal_request LimineRequests::gTerminal{
     .id         = LIMINE_TERMINAL_REQUEST,
     .revision   = 0,
@@ -47,7 +54,6 @@ limine_memmap_request LimineRequests::gMemMap{
     .revision   = 0,
     .response   = nullptr,
 };
-// TODO: higher half direct map?
 
 limine_kernel_address_request LimineRequests::gKernelAddress{
     .id         = LIMINE_KERNEL_ADDRESS_REQUEST,
@@ -57,6 +63,25 @@ limine_kernel_address_request LimineRequests::gKernelAddress{
 
 limine_efi_system_table_request LimineRequests::gEfiSystemTable{
     .id         = LIMINE_EFI_SYSTEM_TABLE_REQUEST,
+    .revision   = 0,
+    .response   = nullptr,
+};
+// TODO: add SMP request
+
+limine_kernel_file_request LimineRequests::gKernelFile{
+    .id         = LIMINE_KERNEL_FILE_REQUEST,
+    .revision   = 0,
+    .response   = nullptr,
+};
+
+limine_rsdp_request LimineRequests::gAcpiRsdp{
+    .id         = LIMINE_RSDP_REQUEST,
+    .revision   = 0,
+    .response   = nullptr,
+};
+
+limine_smbios_request LimineRequests::gSmbios{
+    .id         = LIMINE_SMBIOS_REQUEST,
     .revision   = 0,
     .response   = nullptr,
 };
@@ -73,40 +98,6 @@ limine_boot_time_request LimineRequests::gBootTime{
     .response   = nullptr,
 };
 
-/**
- * Slide higher half: Have the bootloader apply a slide to the base address of the kernel, with
- * a 2MB slide alignment.
- */
-/*
-static struct stivale2_header_tag_slide_hhdm gSlideTag = {
-    .tag = {
-        .identifier = STIVALE2_HEADER_TAG_SLIDE_HHDM_ID,
-        .next = reinterpret_cast<uintptr_t>(&gUnmapNullTag),
-    },
-    // reserved
-    .flags = 0,
-    // alignment of the slide
-    .alignment = 0x200000,
-};
-*/
-
-/**
- * Framebuffer tag: request that the bootloader places the system's graphics hardware into a
- * graphical mode, rather than text mode.
- */
-/*
-static struct stivale2_header_tag_framebuffer gFramebufferTag = {
-    .tag = {
-        .identifier = STIVALE2_HEADER_TAG_FRAMEBUFFER_ID,
-        .next = reinterpret_cast<uintptr_t>(&gTerminalTag),
-    },
-    // the bootloader shall pick the best resolution/bpp
-    .framebuffer_width  = 0,
-    .framebuffer_height = 0,
-    .framebuffer_bpp    = 0
-};
-*/
-
 #pragma GCC diagnostic pop
 
 /**
@@ -117,12 +108,16 @@ __attribute__((section(".limine_reqs"), used))
 static void *gLimineHeaders[] = {
     // required
     &LimineRequests::gStackSize,
+    // &LimineRequests::gHigherHalf,
     &LimineRequests::gTerminal,
     &LimineRequests::gFramebuffer,
     &LimineRequests::gKernelAddress,
     &LimineRequests::gMemMap,
     &LimineRequests::gEfiSystemTable,
+    &LimineRequests::gKernelFile,
     // optional
+    &LimineRequests::gAcpiRsdp,
+    &LimineRequests::gSmbios,
     &LimineRequests::gLoaderInfo,
     &LimineRequests::gBootTime,
     // must be NULL terminated

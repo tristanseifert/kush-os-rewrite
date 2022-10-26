@@ -38,15 +38,38 @@ using namespace Platform::Amd64Uefi;
 
 static void InitPhysAllocator();
 static Kernel::Vm::Map *InitKernelVm();
-static void PopulateKernelVm(Kernel::Vm::Map *map);
-static void MapKernelSections(Kernel::Vm::Map *map);
+static void PopulateKernelVm(Kernel::Vm::Map *);
+static void MapKernelSections(Kernel::Vm::Map *);
+static void MapKernelSection(Kernel::Vm::Map *, const uintptr_t, const uintptr_t, const size_t,
+        const Kernel::Vm::Mode);
+
+extern "C" char __kernel_text_size, __kernel_rodata_size, __kernel_data_size;
+
+/**
+ * @brief Control backtrace symbolication
+ *
+ * XXX: This is currently broken (after VM remapping) for some reason or another
+ */
+static constexpr const bool kEnableSymbolication{false};
+
+/**
+ * @brief Whether all memory ranges are logged
+ *
+ * Useful for debugging; when enabled, the bootloader-provided memory map is dumped.
+ */
+static constexpr const bool kLogMemMap{false};
+
+/**
+ * @brief Whether kernel section initialization is logged
+ */
+static constexpr const bool kLogSections{true};
 
 /**
  * @brief Base address for framebuffer
  *
  * Virtual memory base address (in platform-specific space) for the framebuffer.
  */
-static constexpr uintptr_t kFramebufferBase{0xffff'e800'0000'0000};
+static constexpr const uintptr_t kFramebufferBase{0xffff'e800'0000'0000};
 
 /**
  * Minimum size of physical memory regions to consider for allocation
@@ -148,6 +171,11 @@ static void InitPhysAllocator() {
     for(size_t i = 0; i < map->entry_count; i++) {
         const auto entry = map->entries[i];
 
+        if(kLogMemMap) {
+            Kernel::Logging::Console::Trace("%02u: %016llx - %016llx %010llx %u", i, entry->base,
+                    entry->base + entry->length, entry->length, entry->type);
+        }
+
         // ignore non-usable memory
         // XXX: is there reclaimable memory or other stuff?
         if(entry->type != LIMINE_MEMMAP_USABLE) continue;
@@ -210,14 +238,13 @@ static void PopulateKernelVm(Kernel::Vm::Map *map) {
     // map the kernel executable sections (.text, .rodata, .data/.bss) and then the full image
     MapKernelSections(map);
 
-    // TODO: fix this (for backtraces to work)
-/*
-    auto file2 = reinterpret_cast<const struct stivale2_struct_tag_kernel_file_v2 *>(
-            Stivale2::GetTag(info, STIVALE2_STRUCT_TAG_KERNEL_FILE_V2_ID));
-    if(file2) {
+    auto kernelFileRes = LimineRequests::gKernelFile.response;
+    if(kEnableSymbolication && kernelFileRes && kernelFileRes->kernel_file) {
+        auto file = kernelFileRes->kernel_file;
+
         // get phys size and round up size
-        const auto phys = file2->kernel_file & 0xffffffff;
-        const auto pages = (file2->kernel_size + (PageTable::PageSize() - 1)) / PageTable::PageSize();
+        const uintptr_t phys = reinterpret_cast<uintptr_t>(file->address);
+        const auto pages = (file->size + (PageTable::PageSize() - 1)) / PageTable::PageSize();
         const auto bytes = pages * PageTable::PageSize();
 
         REQUIRE(bytes <
@@ -234,9 +261,9 @@ static void PopulateKernelVm(Kernel::Vm::Map *map) {
 
         gKernelImageVm = vm;
     } else {
+        Kernel::Logging::Console::Warning("failed to get kernel file struct!");
         Backtrace::ParseKernelElf(nullptr, 0);
     }
-*/
 
     // get fb info
     auto fbResponse = LimineRequests::gFramebuffer.response;
@@ -248,19 +275,26 @@ static void PopulateKernelVm(Kernel::Vm::Map *map) {
     auto fbInfo = fbResponse->framebuffers[0];
     REQUIRE(fbInfo, "failed to get framebuffer info");
 
-    // framebuffer size, rounded up to page size
-    size_t fbLength = fbInfo->height * fbInfo->pitch;
-    fbLength += 4096 - (fbLength % 4096);
+    if(fbResponse->framebuffer_count > 1) {
+        Kernel::Logging::Console::Warning("got %u framebuffers; using first one!",
+                fbResponse->framebuffer_count);
+    }
 
-    Kernel::Console::Notice("Framebuffer: %016llx %zu bytes", fbInfo->address, fbLength);
+    // framebuffer size, rounded up to page size
+    size_t fbLength = PageTable::NearestPageSize(fbInfo->height * fbInfo->pitch);
+
+    // TODO: this is a GIGANTIC hack, lol
+    const uintptr_t fbPhysBase = reinterpret_cast<uintptr_t>(fbInfo->address) & 0xffffffff;
+
+    Kernel::Console::Notice("Framebuffer: %016llx %zu bytes", fbPhysBase, fbLength);
 
     // map framebuffer (if specified by loader)
     static KUSH_ALIGNED(64) uint8_t gFbVmBuf[sizeof(Kernel::Vm::ContiguousPhysRegion)];
     Kernel::Vm::ContiguousPhysRegion *framebuffer{nullptr};
 
     framebuffer = reinterpret_cast<Kernel::Vm::ContiguousPhysRegion *>(gFbVmBuf);
-    new(framebuffer) Kernel::Vm::ContiguousPhysRegion(reinterpret_cast<uintptr_t>(fbInfo->address),
-            fbLength, Kernel::Vm::Mode::KernelRW);
+    new(framebuffer) Kernel::Vm::ContiguousPhysRegion(fbPhysBase, fbLength,
+            Kernel::Vm::Mode::KernelRW);
 
     err = map->add(kFramebufferBase, framebuffer);
     REQUIRE(!err, "failed to map %s: %d", "framebuffer", err);
@@ -282,8 +316,7 @@ static void PopulateKernelVm(Kernel::Vm::Map *map) {
  * hold .text, .rodata, and .data/.bss respectively.
  */
 static void MapKernelSections(Kernel::Vm::Map *map) {
-    int err;
-    (void) err;
+    size_t roundedSize;
 
     // get the physical and virtual base of the kernel image
     uint64_t kernelPhysBase{0}, kernelVirtBase{0xffffffff80000000};
@@ -297,52 +330,82 @@ static void MapKernelSections(Kernel::Vm::Map *map) {
     REQUIRE(!!kernelPhysBase, "failed to get kernel %s base", "phys");
     REQUIRE(!!kernelVirtBase, "failed to get kernel %s base", "virt");
 
-    /*
-     * Allocate a VM object for each of the PMRs set up by the bootloader. Each PMR corresponds to
-     * a section of contiguous protection modes. Each of the three PHDRs specified in the linker
-     * script will create its own section, with the .text section split into an executable and a
-     * non-executable part.
-     */
-    // TODO: do this
-/*
-    auto pmrs = reinterpret_cast<const stivale2_struct_tag_pmrs *>
-        (Stivale2::GetTag(info, STIVALE2_STRUCT_TAG_PMRS_ID));
-    REQUIRE(map, "Missing loader info struct %s (%016zx)", "protected memory ranges",
-            STIVALE2_STRUCT_TAG_PMRS_ID);
+    Kernel::Logging::Console::Trace("Kernel: phys=%p, virt=%p", kernelPhysBase, kernelVirtBase);
 
-    constexpr static const size_t kMaxPmrs{4};
-    static KUSH_ALIGNED(64) uint8_t gVmObjectAllocBuf[kMaxPmrs][sizeof(Kernel::Vm::ContiguousPhysRegion)];
+    /*
+     * This here has the potential to be rather… flaky and fragile, because we make assumptions on
+     * how the sections are laid out inside the ELF. These assumptions _should_ hold true always
+     * with our linker script, though.
+     */
+    struct SectionInfo {
+        const char *name;
+        const size_t size;
+        const Kernel::Vm::Mode mode;
+    };
+
+    constexpr static const size_t kNumSections{3};
+    static const SectionInfo kSectionInfo[kNumSections]{
+        {
+            .name                       = ".text",
+            .size                       = reinterpret_cast<size_t>(&__kernel_text_size),
+            .mode                       = Kernel::Vm::Mode::KernelExec,
+        },
+        {
+            .name                       = ".rodata",
+            .size                       = reinterpret_cast<size_t>(&__kernel_rodata_size),
+            .mode                       = Kernel::Vm::Mode::KernelRead,
+        },
+        {
+            .name                       = ".data",
+            .size                       = reinterpret_cast<size_t>(&__kernel_data_size),
+            .mode                       = Kernel::Vm::Mode::KernelRW,
+        },
+    };
+
+    for(size_t i = 0; i < kNumSections; i++) {
+        const auto &info = kSectionInfo[i];
+
+        roundedSize = PageTable::NearestPageSize(info.size);
+        if(kLogSections) {
+            Kernel::Logging::Console::Trace("%8s: phys=%016llx, virt=%016llx %06llx %08lx",
+                    info.name, kernelPhysBase, kernelVirtBase, roundedSize,
+                    static_cast<size_t>(info.mode));
+        }
+
+        MapKernelSection(map, kernelPhysBase, kernelVirtBase, roundedSize, info.mode);
+
+        kernelPhysBase += roundedSize;
+        kernelVirtBase += roundedSize;
+    }
+}
+
+/**
+ * @brief Create VM object for a single kernel section
+ *
+ * @param map VM map to add the object to
+ * @param physBase Physical base address of this section
+ * @param virtBase Virtual base address of this section
+ * @param length Length of the section, in bytes (must be page aligned)
+ * @param mode Protection mode for the section
+ */
+static void MapKernelSection(Kernel::Vm::Map *map, const uintptr_t physBase,
+        const uintptr_t virtBase, const size_t length, const Kernel::Vm::Mode mode) {
+    int err;
+
+    // static storage for the associated VM objects
+    constexpr static const size_t kMaxSections{4};
+    static KUSH_ALIGNED(64) uint8_t gVmObjectAllocBuf[kMaxSections]
+        [sizeof(Kernel::Vm::ContiguousPhysRegion)];
     static size_t gVmObjectAllocNextFree{0};
 
-    for(size_t i = 0; i < pmrs->entries; i++) {
-        REQUIRE(i < kMaxPmrs, "exceeded max PMRs");
-        const auto &pmr = pmrs->pmrs[i];
+    // create VM object
+    const auto vmIdx = gVmObjectAllocNextFree;
+    REQUIRE(++gVmObjectAllocNextFree < kMaxSections, "exceeded max kernel sections");
 
-        // translate the physical address and mode
-        const uint64_t phys = kernelPhysBase + (pmr.base - kernelVirtBase);
-        Kernel::Vm::Mode mode{Kernel::Vm::Mode::None};
+    auto vm = reinterpret_cast<Kernel::Vm::ContiguousPhysRegion *>(gVmObjectAllocBuf[vmIdx]);
+    new (vm) Kernel::Vm::ContiguousPhysRegion(physBase, length, mode);
 
-        if(pmr.permissions & STIVALE2_PMR_EXECUTABLE) {
-            mode |= Kernel::Vm::Mode::KernelExec;
-        }
-        if(pmr.permissions & STIVALE2_PMR_READABLE) {
-            mode |= Kernel::Vm::Mode::KernelRead;
-        }
-        if(pmr.permissions & STIVALE2_PMR_WRITABLE) {
-            REQUIRE(!TestFlags(mode & Kernel::Vm::Mode::KernelExec),
-                    "refusing to add PMR %zu (virt %016zx phys %016zx len %zx mode %02zx) as WX",
-                    i, pmr.base, phys, pmr.length, pmr.permissions);
-            mode |= Kernel::Vm::Mode::KernelWrite;
-        }
-
-        // create the VM object and add it
-        const auto vmIdx = gVmObjectAllocNextFree++;
-        auto vm = reinterpret_cast<Kernel::Vm::ContiguousPhysRegion *>(gVmObjectAllocBuf[vmIdx]);
-        new (vm) Kernel::Vm::ContiguousPhysRegion(phys, pmr.length, mode);
-
-        err = map->add(pmr.base, vm);
-        REQUIRE(!err, "failed to map PMR %zu (virt %016zx phys %016zx len %zx mode %02zx): %d",
-                i, pmr.base, phys, pmr.length, pmr.permissions, err);
-    }
-*/
+    err = map->add(virtBase, vm);
+    REQUIRE(!err, "failed to map kernel section (virt %016zx phys %016zx len %zx mode %02zx): %d",
+            virtBase, physBase, length, static_cast<size_t>(mode), err);
 }

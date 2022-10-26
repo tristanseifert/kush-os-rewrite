@@ -29,8 +29,6 @@ uint16_t Console::gDebugconPort{0};
  * @param info Environment from the bootloader
  */
 void Console::Init() {
-    // TODO: get from header
-
     // check for the terminal info tag
     auto term = LimineRequests::gTerminal.response;
     if(term) {
@@ -39,16 +37,15 @@ void Console::Init() {
         gTerminalWrite = term->write;
     }
 
-    // TODO: re-implement this
     // get at the command line (to determine the serial/debugcon)
-/*
-    auto cmd = reinterpret_cast<struct stivale2_struct_tag_cmdline *>
-        (Stivale2::GetTag(info, STIVALE2_STRUCT_TAG_CMDLINE_ID));
-    if(cmd) {
-        auto cmdline = reinterpret_cast<const char *>(cmd->cmdline);
-        ParseCmd(cmdline);
+    auto kernelFileRes = LimineRequests::gKernelFile.response;
+    if(kernelFileRes && kernelFileRes->kernel_file) {
+        auto kernelFile = kernelFileRes->kernel_file;
+
+        if(kernelFile->cmdline) {
+            ParseCmd(kernelFile->cmdline);
+        }
     }
-*/
 }
 
 /**
@@ -74,6 +71,8 @@ void Console::ParseCmd(const char *cmdline) {
         // reading the value
         VALUE,
     } state = State::IDLE;
+
+    Kernel::Logging::Console::Trace("Kernel command line: `%s`", cmdline);
 
     // loop through the command line
     do {
@@ -262,7 +261,8 @@ void Console::VmEnabled() {
     static KUSH_ALIGNED(64) uint8_t gBuf[sizeof(FbCons)];
     auto ptr = reinterpret_cast<FbCons *>(gBuf);
 
-    new(ptr) FbCons(reinterpret_cast<uint32_t *>(gFbBase), FbCons::ColorOrder::ARGB, 1024, 768);
+    new(ptr) FbCons(reinterpret_cast<uint32_t *>(gFbBase), FbCons::ColorOrder::ARGB,
+            gFbWidth, gFbHeight);
 
     gFbCons = ptr;
 }

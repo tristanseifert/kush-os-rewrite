@@ -25,6 +25,11 @@ struct LimineRequests {
     static limine_stack_size_request gStackSize;
 
     /**
+     * @brief Higher half direct map (mandatory)
+     */
+    static limine_hhdm_request gHigherHalf;
+
+    /**
      * @brief Text IO terminal (mandatory)
      */
     static limine_terminal_request gTerminal;
@@ -48,6 +53,21 @@ struct LimineRequests {
      * @brief EFI system table (mandatory)
      */
     static limine_efi_system_table_request gEfiSystemTable;
+
+    /**
+     * @brief Kernel file representation (mandatory)
+     */
+    static limine_kernel_file_request gKernelFile;
+
+    /**
+     * @brief ACPI RSDP table (optional)
+     */
+    static limine_rsdp_request gAcpiRsdp;
+
+    /**
+     * @brief SMBIOS entry points (optional)
+     */
+    static limine_smbios_request gSmbios;
 
     /**
      * @brief Bootloader information (optional)
