@@ -22,9 +22,9 @@ SECTIONS {
     } :text
     __kernel_text_end = .;
 
-    /* Place the stivale2 header into rodata */
-    .stivale2hdr : ALIGN(4K) {
-        KEEP(*(.stivale2hdr))
+    /* Place the limine header into rodata */
+    .limine_reqs : ALIGN(4K) {
+        KEEP(*(.limine_reqs *.limine_reqs*));
     } :rodata
 
     /* kernel read-only data (immutable) section */

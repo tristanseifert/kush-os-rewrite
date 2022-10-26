@@ -4,9 +4,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-extern "C" void _osentry(struct stivale2_struct *);
+extern "C" void _osentry();
 
-struct stivale2_struct_tag_terminal;
+struct limine_terminal;
+struct limine_framebuffer;
 
 namespace Kernel::Vm {
 class Map;
@@ -27,30 +28,31 @@ namespace Platform::Amd64Uefi {
  * - Hardware serial port
  */
 class Console {
-    friend void ::_osentry(struct stivale2_struct *);
+    friend void ::_osentry();
 
     public:
         Console() = delete;
 
         static void Write(const char *string, const size_t numChars);
 
-        static int SetFramebuffer(struct stivale2_struct *, Kernel::Vm::MapEntry *, void *);
+        static int SetFramebuffer(const struct limine_framebuffer *, Kernel::Vm::MapEntry *, void *);
 
     private:
-        static void Init(struct stivale2_struct *);
+        static void Init();
 
-        static void PrepareForVm(struct stivale2_struct *, Kernel::Vm::Map *);
+        static void PrepareForVm(Kernel::Vm::Map *);
         static void VmEnabled();
 
         static void ParseCmd(const char *);
         static void ParseCmdToken(const char *, const size_t);
 
     private:
-        /// The sivale2 callback for terminal output
-        using TerminalWrite = void (*)(const char *str, size_t len);
+        /// The limine function type for terminal output
+        using TerminalWrite = void (*)(struct limine_terminal *, const char *str,
+                const uint64_t len);
 
         /// If non-null, the bootloader-provided terminal structure
-        static struct stivale2_struct_tag_terminal *gTerminal;
+        static struct limine_terminal *gTerminal;
         /// Function to write a string to loader terminal; only valid if `gTerminal` is also valid
         static TerminalWrite gTerminalWrite;
 

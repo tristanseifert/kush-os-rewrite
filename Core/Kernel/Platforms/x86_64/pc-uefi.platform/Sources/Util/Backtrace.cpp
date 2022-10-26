@@ -30,13 +30,16 @@ struct stackframe {
  * This attempts to locate the string and symbol tables in the loaded kernel ELF image. It relies
  * on the entire kernel image being loaded to memory, rather than just the executable sections.
  */
-void Backtrace::Init(struct stivale2_struct *loaderInfo) {
+void Backtrace::Init() {
+/*
     // get the file address
     auto file2 = reinterpret_cast<const struct stivale2_struct_tag_kernel_file_v2 *>(
             Stivale2::GetTag(loaderInfo, STIVALE2_STRUCT_TAG_KERNEL_FILE_V2_ID));
     if(file2) {
         ParseKernelElf(reinterpret_cast<const void *>(file2->kernel_file), file2->kernel_size);
     }
+*/
+    // TODO: fix this
 
     // ensure we've loaded the needed sections
     if(!gSymtab || !gSymtabLen || !gStrtab || !gStrtabLen) {

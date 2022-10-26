@@ -12,7 +12,7 @@
 
 using namespace Platform::Amd64Uefi;
 
-struct stivale2_struct_tag_terminal *Console::gTerminal{nullptr};
+struct limine_terminal *Console::gTerminal{nullptr};
 Console::TerminalWrite Console::gTerminalWrite{nullptr};
 Kernel::Vm::MapEntry *Console::gFb{nullptr};
 void *Console::gFbBase{nullptr};
@@ -28,21 +28,27 @@ uint16_t Console::gDebugconPort{0};
  *
  * @param info Environment from the bootloader
  */
-void Console::Init(struct stivale2_struct *info) {
+void Console::Init() {
+    // TODO: get from header
+
     // check for the terminal info tag
-    gTerminal = reinterpret_cast<struct stivale2_struct_tag_terminal *>
-        (Stivale2::GetTag(info, STIVALE2_STRUCT_TAG_TERMINAL_ID));
-    if(gTerminal) {
-        gTerminalWrite = reinterpret_cast<TerminalWrite>(gTerminal->term_write);
+    auto term = LimineRequests::gTerminal.response;
+    if(term) {
+        gTerminal = term->terminals[0];
+        //gTerminalWrite = reinterpret_cast<TerminalWrite>(term->write);
+        gTerminalWrite = term->write;
     }
 
+    // TODO: re-implement this
     // get at the command line (to determine the serial/debugcon)
+/*
     auto cmd = reinterpret_cast<struct stivale2_struct_tag_cmdline *>
         (Stivale2::GetTag(info, STIVALE2_STRUCT_TAG_CMDLINE_ID));
     if(cmd) {
         auto cmdline = reinterpret_cast<const char *>(cmd->cmdline);
         ParseCmd(cmdline);
     }
+*/
 }
 
 /**
@@ -187,7 +193,7 @@ void Console::Write(const char *string, const size_t numChars) {
 
     // lastly, print to the loader console
     if(gTerminalWrite) {
-        gTerminalWrite(string, numChars);
+        gTerminalWrite(gTerminal, string, numChars);
     }
     if(gFbCons) {
         gFbCons->write(string, numChars);
@@ -199,7 +205,7 @@ void Console::Write(const char *string, const size_t numChars) {
  *
  * This disables the bootloader console, since we'll no longer have its code mapped.
  */
-void Console::PrepareForVm(struct stivale2_struct *info, Kernel::Vm::Map *map) {
+void Console::PrepareForVm(Kernel::Vm::Map *map) {
     // disable bootloader console
     Console::Write("Preparing console for VM enablement...\n", 39);
     gTerminalWrite = nullptr;
@@ -211,13 +217,13 @@ void Console::PrepareForVm(struct stivale2_struct *info, Kernel::Vm::Map *map) {
  * This fetches more framebuffer info, then stores it for later, so that when the virtual map is
  * actually enabled, we can just enable the console.
  *
- * @param info Bootloader information structure
+ * @param fbInfo Framebuffer information structure, provided by the bootloader
  * @param fb Framebuffer VM object
  * @param base Base address of framebuffer, as mapped in memory
  *
  * @return 0 on success
  */
-int Console::SetFramebuffer(struct stivale2_struct *info, Kernel::Vm::MapEntry *fb, void *base) {
+int Console::SetFramebuffer(const struct limine_framebuffer *fbInfo, Kernel::Vm::MapEntry *fb, void *base) {
     // specify a `nullptr` framebuffer to clear its state
     if(!fb) {
         //if(gFb) gFb->release();
@@ -227,19 +233,13 @@ int Console::SetFramebuffer(struct stivale2_struct *info, Kernel::Vm::MapEntry *
     }
 
     // get framebuffer info
-    REQUIRE(info, "invalid loader info");
+    REQUIRE(fbInfo, "invalid fb info");
     REQUIRE(fb && base, "invalid framebuffer base");
 
-    auto fbInfo = reinterpret_cast<const stivale2_struct_tag_framebuffer *>
-        (Stivale2::GetTag(info, STIVALE2_STRUCT_TAG_FRAMEBUFFER_ID));
-    if(!fbInfo) {
-        return -1;
-    }
-
     // store it for later
-    gFbWidth = fbInfo->framebuffer_width;
-    gFbHeight = fbInfo->framebuffer_height;
-    gFbStride = fbInfo->framebuffer_pitch;
+    gFbWidth = fbInfo->width;
+    gFbHeight = fbInfo->height;
+    gFbStride = fbInfo->pitch;
 
     gFb = fb;
     gFbBase = base;

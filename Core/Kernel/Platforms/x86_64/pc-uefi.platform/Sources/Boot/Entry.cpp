@@ -14,7 +14,7 @@
  */
 #include <stdint.h>
 #include <stddef.h>
-#include <stivale2.h>
+#include <limine.h>
 
 #include <Init.h>
 #include <Memory/PhysicalAllocator.h>
@@ -36,10 +36,10 @@
 
 using namespace Platform::Amd64Uefi;
 
-static void InitPhysAllocator(struct stivale2_struct *info);
+static void InitPhysAllocator();
 static Kernel::Vm::Map *InitKernelVm();
-static void PopulateKernelVm(struct stivale2_struct *info, Kernel::Vm::Map *map);
-static void MapKernelSections(struct stivale2_struct *info, Kernel::Vm::Map *map);
+static void PopulateKernelVm(Kernel::Vm::Map *map);
+static void MapKernelSections(Kernel::Vm::Map *map);
 
 /**
  * @brief Base address for framebuffer
@@ -78,12 +78,12 @@ static Kernel::Vm::MapEntry *gKernelImageVm{nullptr};
 /**
  * Entry point from the bootloader.
  */
-extern "C" void _osentry(struct stivale2_struct *loaderInfo) {
+extern "C" void _osentry() {
     // set up the console (bootloader terminal, serial, etc.) and kernel console
-    Console::Init(loaderInfo);
+    Console::Init();
     Kernel::Console::Init();
 
-    Backtrace::Init(loaderInfo);
+    Backtrace::Init();
 
     // initialize processor data structures
     Processor::VerifyFeatures();
@@ -93,17 +93,19 @@ extern "C" void _osentry(struct stivale2_struct *loaderInfo) {
     Idt::InitBsp();
 
     // initialize the physical allocator, then the initial kernel VM map
-    InitPhysAllocator(loaderInfo);
+    InitPhysAllocator();
 
     auto map = InitKernelVm();
-    PopulateKernelVm(loaderInfo, map);
+    PopulateKernelVm(map);
 
     // prepare a few internal components
-    Console::PrepareForVm(loaderInfo, map);
+    Console::PrepareForVm(map);
 
     // then activate the map
     map->activate();
     Memory::PhysicalMap::FinishedEarlyBoot();
+
+    // sets up kernel framebuffer, if any
     Console::VmEnabled();
 
     if(gKernelImageVm) {
@@ -129,7 +131,7 @@ extern "C" void _osentry(struct stivale2_struct *loaderInfo) {
  *
  * @param info Information structure provided by the bootloader
  */
-static void InitPhysAllocator(struct stivale2_struct *info) {
+static void InitPhysAllocator() {
     // initialize kernel physical allocator
     static const size_t kExtraPageSizes[]{
         0x200000,
@@ -137,25 +139,26 @@ static void InitPhysAllocator(struct stivale2_struct *info) {
     Kernel::PhysicalAllocator::Init(0x1000, kExtraPageSizes, 1);
 
     // locate physical memory map and validate it
-    auto map = reinterpret_cast<const stivale2_struct_tag_memmap *>
-        (Stivale2::GetTag(info, STIVALE2_STRUCT_TAG_MEMMAP_ID));
-    REQUIRE(map, "Missing loader info struct %s (%016zx)", "phys mem map",
-            STIVALE2_STRUCT_TAG_MEMMAP_ID);
+    auto map = LimineRequests::gMemMap.response;
+    REQUIRE(map, "Missing loader info struct %s", "phys mem map");
+    REQUIRE(map->entry_count, "Invalid loader info struct %s", "phys mem map");
     REQUIRE(map->entries, "Invalid loader info struct %s", "phys mem map");
 
     // add each usable region to the physical allocator
-    for(size_t i = 0; i < map->entries; i++) {
-        const auto &entry = map->memmap[i];
+    for(size_t i = 0; i < map->entry_count; i++) {
+        const auto entry = map->entries[i];
 
-        if(entry.type != STIVALE2_MMAP_USABLE) continue;
+        // ignore non-usable memory
+        // XXX: is there reclaimable memory or other stuff?
+        if(entry->type != LIMINE_MEMMAP_USABLE) continue;
         // ignore if it's too small
-        else if(entry.length < kMinPhysicalRegionSize) continue;
+        else if(entry->length < kMinPhysicalRegionSize) continue;
         // if this entire region is below the cutoff, ignore it
-        else if((entry.base + entry.length) < kPhysAllocationBound) continue;
+        else if((entry->base + entry->length) < kPhysAllocationBound) continue;
 
         // adjust the base/length (if needed)
-        uintptr_t base = entry.base;
-        size_t length = entry.length;
+        uintptr_t base = entry->base;
+        size_t length = entry->length;
 
         if(base < kPhysAllocationBound) {
             const auto diff = (kPhysAllocationBound - base);
@@ -201,12 +204,14 @@ static Kernel::Vm::Map *InitKernelVm() {
  *
  * @param info Information structure provided by the bootloader
  */
-static void PopulateKernelVm(struct stivale2_struct *info, Kernel::Vm::Map *map) {
+static void PopulateKernelVm(Kernel::Vm::Map *map) {
     int err;
 
     // map the kernel executable sections (.text, .rodata, .data/.bss) and then the full image
-    MapKernelSections(info, map);
+    MapKernelSections(map);
 
+    // TODO: fix this (for backtraces to work)
+/*
     auto file2 = reinterpret_cast<const struct stivale2_struct_tag_kernel_file_v2 *>(
             Stivale2::GetTag(info, STIVALE2_STRUCT_TAG_KERNEL_FILE_V2_ID));
     if(file2) {
@@ -231,32 +236,38 @@ static void PopulateKernelVm(struct stivale2_struct *info, Kernel::Vm::Map *map)
     } else {
         Backtrace::ParseKernelElf(nullptr, 0);
     }
+*/
+
+    // get fb info
+    auto fbResponse = LimineRequests::gFramebuffer.response;
+    if(!fbResponse || !fbResponse->framebuffer_count) {
+        Kernel::Logging::Console::Warning("UEFI provided no framebuffers!");
+        return;
+    }
+
+    auto fbInfo = fbResponse->framebuffers[0];
+    REQUIRE(fbInfo, "failed to get framebuffer info");
+
+    // framebuffer size, rounded up to page size
+    size_t fbLength = fbInfo->height * fbInfo->pitch;
+    fbLength += 4096 - (fbLength % 4096);
+
+    Kernel::Console::Notice("Framebuffer: %016llx %zu bytes", fbInfo->address, fbLength);
 
     // map framebuffer (if specified by loader)
     static KUSH_ALIGNED(64) uint8_t gFbVmBuf[sizeof(Kernel::Vm::ContiguousPhysRegion)];
     Kernel::Vm::ContiguousPhysRegion *framebuffer{nullptr};
 
-    auto mmap = reinterpret_cast<const stivale2_struct_tag_memmap *>
-        (Stivale2::GetTag(info, STIVALE2_STRUCT_TAG_MEMMAP_ID));
+    framebuffer = reinterpret_cast<Kernel::Vm::ContiguousPhysRegion *>(gFbVmBuf);
+    new(framebuffer) Kernel::Vm::ContiguousPhysRegion(reinterpret_cast<uintptr_t>(fbInfo->address),
+            fbLength, Kernel::Vm::Mode::KernelRW);
 
-    for(size_t i = 0; i < mmap->entries; i++) {
-        const auto &entry = mmap->memmap[i];
-        if(entry.type != STIVALE2_MMAP_FRAMEBUFFER) continue;
+    err = map->add(kFramebufferBase, framebuffer);
+    REQUIRE(!err, "failed to map %s: %d", "framebuffer", err);
 
-        // create the VM object
-        framebuffer = reinterpret_cast<Kernel::Vm::ContiguousPhysRegion *>(gFbVmBuf);
-        new(framebuffer) Kernel::Vm::ContiguousPhysRegion(entry.base, entry.length,
-                Kernel::Vm::Mode::KernelRW);
-
-        err = map->add(kFramebufferBase, framebuffer);
-        REQUIRE(!err, "failed to map %s: %d", "framebuffer", err);
-
-        Kernel::Console::Notice("Framebuffer: %016llx %zu bytes", entry.base, entry.length);
-        break;
-    }
-
+    // initialize it in the console boi
     if(framebuffer) {
-        Console::SetFramebuffer(info, framebuffer, reinterpret_cast<void *>(kFramebufferBase));
+        Console::SetFramebuffer(fbInfo, framebuffer, reinterpret_cast<void *>(kFramebufferBase));
     }
 
     // last, remap the physical allocator structures
@@ -270,18 +281,21 @@ static void PopulateKernelVm(struct stivale2_struct *info, Kernel::Vm::Map *map)
  * loaded by the bootloader) for the kernel. This roughly corresponds to the RX/R/RW regions that
  * hold .text, .rodata, and .data/.bss respectively.
  */
-static void MapKernelSections(struct stivale2_struct *info, Kernel::Vm::Map *map) {
+static void MapKernelSections(Kernel::Vm::Map *map) {
     int err;
+    (void) err;
 
     // get the physical and virtual base of the kernel image
     uint64_t kernelPhysBase{0}, kernelVirtBase{0xffffffff80000000};
 
-    auto base = reinterpret_cast<const stivale2_struct_tag_kernel_base_address *>
-        (Stivale2::GetTag(info, STIVALE2_STRUCT_TAG_KERNEL_BASE_ADDRESS_ID));
+    auto base = LimineRequests::gKernelAddress.response;
     if(base) {
-        kernelPhysBase = base->physical_base_address;
-        kernelVirtBase = base->virtual_base_address;
+        kernelPhysBase = base->physical_base;
+        kernelVirtBase = base->virtual_base;
     }
+
+    REQUIRE(!!kernelPhysBase, "failed to get kernel %s base", "phys");
+    REQUIRE(!!kernelVirtBase, "failed to get kernel %s base", "virt");
 
     /*
      * Allocate a VM object for each of the PMRs set up by the bootloader. Each PMR corresponds to
@@ -289,6 +303,8 @@ static void MapKernelSections(struct stivale2_struct *info, Kernel::Vm::Map *map
      * script will create its own section, with the .text section split into an executable and a
      * non-executable part.
      */
+    // TODO: do this
+/*
     auto pmrs = reinterpret_cast<const stivale2_struct_tag_pmrs *>
         (Stivale2::GetTag(info, STIVALE2_STRUCT_TAG_PMRS_ID));
     REQUIRE(map, "Missing loader info struct %s (%016zx)", "protected memory ranges",
@@ -328,4 +344,5 @@ static void MapKernelSections(struct stivale2_struct *info, Kernel::Vm::Map *map
         REQUIRE(!err, "failed to map PMR %zu (virt %016zx phys %016zx len %zx mode %02zx): %d",
                 i, pmr.base, phys, pmr.length, pmr.permissions, err);
     }
+*/
 }

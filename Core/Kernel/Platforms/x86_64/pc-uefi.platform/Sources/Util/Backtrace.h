@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-extern "C" void _osentry(struct stivale2_struct *);
+extern "C" void _osentry();
 
 namespace Platform::Amd64Uefi {
 /**
@@ -15,7 +15,7 @@ namespace Platform::Amd64Uefi {
  * backtraces.
  */
 class Backtrace {
-    friend void ::_osentry(struct stivale2_struct *);
+    friend void ::_osentry();
 
     public:
         Backtrace() = delete;
@@ -29,7 +29,7 @@ class Backtrace {
         static void ParseKernelElf(const void *base, const size_t len);
 
     private:
-        static void Init(struct stivale2_struct *);
+        static void Init();
 
         /// Start of the ELF symbol table
         static const void *gSymtab;

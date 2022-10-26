@@ -8,6 +8,13 @@ We use CMake to build everything. The single `CMakeLists.txt` in this directory 
 
 Most likely, you're best served by setting `CMAKE_BUILD_TYPE` to `RelwithDebInfo` to produce optimized, release binaries but with debugging information. Especially a debug kernel will cause significant performance losses.
 
+Try starting with something like this:
+
+```
+cmake -G Ninja -B build -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-<arch>-clang.cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_VERBOSE_MAKEFILE=NO -DKERNEL_PLATFORM_OPTION=<platform>
+cmake --build build -j32
+```
+
 ### Directory structure
 - Core: Basic system components
     - Kernel: Code for the kush-os kernel

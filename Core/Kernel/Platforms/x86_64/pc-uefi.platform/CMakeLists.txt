@@ -20,7 +20,7 @@ add_library(platform-amd64-uefi OBJECT
 
 target_include_directories(platform-amd64-uefi PUBLIC ${CMAKE_CURRENT_LIST_DIR}/Includes)
 target_include_directories(platform-amd64-uefi PRIVATE ${CMAKE_CURRENT_LIST_DIR}/Sources)
-target_include_directories(platform-amd64-uefi PRIVATE ${CMAKE_CURRENT_LIST_DIR}/External/stivale)
+target_include_directories(platform-amd64-uefi PRIVATE ${CMAKE_CURRENT_LIST_DIR}/External/limine)
 target_include_directories(platform-amd64-uefi PRIVATE ${KERNEL_LIST_DIR}/Includes)
 target_include_directories(platform-amd64-uefi PRIVATE ${KUSH_TOOLCHAIN_HEADERS})
 
