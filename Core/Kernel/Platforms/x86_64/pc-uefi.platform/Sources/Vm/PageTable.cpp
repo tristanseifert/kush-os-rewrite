@@ -272,6 +272,149 @@ int PageTable::mapPage(const uint64_t phys, const uintptr_t _virt, const Kernel:
     return 0;
 }
 
+/**
+ * @brief Unmap a single page
+ *
+ * Removes a page table mapping for a given page.
+ *
+ * @param _virt Virtual page address to unmap
+ * @param unmapLargePages Whether large pages are also unmapped
+ *
+ * @TODO Do more testing to make sure this works for all cases
+ */
+int PageTable::unmapPage(const uintptr_t _virt, const bool unmapLargePages) {
+    uintptr_t ptAddr{0};
+
+    // ensure virtual address is canonical
+    if(_virt > 0x00007FFFFFFFFFFF && _virt < 0xFFFF800000000000) {
+        // TODO: error code enum
+        return -1000;
+    }
+
+    const auto virt = _virt & 0xFFFFFFFFFFFF;
+
+    // read the PML4 entry
+    const auto pml4eIdx = (virt >> 39) & 0x1FF;
+    auto pml4e = ReadTable(this->pml4Phys, pml4eIdx);
+
+    // PDPT not present
+    if(!(pml4e & (1 << 0))) {
+        return 0;
+    }
+
+    // read the PDPT entry
+    const auto pdptAddr = (pml4e & ~0xFFF) & ~static_cast<uintptr_t>(PageFlags::FlagsMask);
+    auto pdpte = ReadTable(pdptAddr, (virt >> 30) & 0x1FF);
+
+    // no PDT present
+    if(!(pdpte & (1 << 0))) {
+        return 0;
+    }
+    // 1G page mapped
+    else if(pdpte & (1 << 7)) {
+        if(!unmapLargePages) {
+            // TODO: error codes
+            return -1;
+        }
+
+        // TODO: should we keep the page entry as-is, but mark as not present instead?
+        WriteTable(pdptAddr, (virt >> 30) & 0x1FF, 0);
+        return 1;
+    }
+
+    // read the page directory entry to find page table
+    const auto pdtAddr = (pdpte & ~0xFFF) & ~static_cast<uintptr_t>(PageFlags::FlagsMask);
+    auto pdte = ReadTable(pdtAddr, (virt >> 21) & 0x1FF);
+
+    // no page table
+    if(!(pdte & (1 << 0))) {
+        return 0;
+    }
+    // 2M page mapped
+    else if(pdte & (1 << 7)) {
+        if(!unmapLargePages) {
+            // TODO: error codes
+            return -1;
+        }
+
+        // TODO: should we keep the page entry as-is, but mark as not present instead?
+        WriteTable(pdtAddr, (virt >> 21) & 0x1FF, 0);
+        return 1;
+    }
+
+    ptAddr = (pdte & ~0xFFF) & ~static_cast<uintptr_t>(PageFlags::FlagsMask);
+
+    // clear the page table entry
+    // TODO: should we keep the page entry as-is, but mark as not present instead?
+    WriteTable(ptAddr, (virt >> 12) & 0x1FF, 0);
+    return 1;
+}
+
+/**
+ * @brief Unmap a single page
+ *
+ * Removes a page table mapping for a given page.
+ *
+ * @param virt Virtual page address to unmap
+ *
+ * @return 1 if the page was unmapped, 0 if there was no page to unmap, or a negative error code
+ *
+ * @remark No garbage collection of paging structures is performed, and TLBs are not automatically
+ *         updated.
+ */
+int PageTable::unmapPage(const uintptr_t virt) {
+    return this->unmapPage(virt, false);
+}
+
+/**
+ * @brief Remove mappings for a contiguous region of address space
+ *
+ * Removes all mappings for all virtual addresses in the given range. If this results in any
+ * completely empty paging structures, they will be released.
+ *
+ * @param virt Base address of the region to deallocate
+ * @param length Size of the region to deallocate (must be a multiple of page size)
+ *
+ * @return 0 on success or a negative error code
+ *
+ * @note TLB entries are not automatically invalidated.
+ *
+ * @TODO This could likely be optimized
+ */
+int PageTable::unmap(const uintptr_t virt, const size_t length) {
+    int err;
+
+    // validate inputs
+    if(!virt || (virt % PageSize()) || !length || (length % PageSize())) {
+        // TODO: standardized error codes
+        return -1;
+    }
+
+    // unmap each page
+    const auto numPages = length / PageSize();
+
+    for(size_t page = 0; page < numPages; page++) {
+        err = this->unmapPage(virt + (page * PageSize()), true);
+
+        // only bail if there's an error: if there was no page to unmap, ignore that.
+        if(err < 0) {
+            return err;
+        }
+    }
+
+    /*
+     * Now garbage collect all page frames we touched during this operation: we'll check all paging
+     * structures associated with the entire virtual address range.
+     *
+     * We deallocate PTs and PDs automatically; if the address is below the user/kernel split, we
+     * will also deallocate PDPTs. (Since all maps copy the upper PDPTs from the kernel, these need
+     * to remain valid forever.)
+     */
+    // TODO: implement paging structure garbage collection, lol…
+
+    return 0;
+}
+
 
 
 /**
@@ -358,7 +501,6 @@ int PageTable::getPhysAddr(const uintptr_t _virt, uint64_t &outPhys, Kernel::Vm:
 
     return 1;
 }
-
 
 /**
  * @brief Invalidate a range of virtual memory

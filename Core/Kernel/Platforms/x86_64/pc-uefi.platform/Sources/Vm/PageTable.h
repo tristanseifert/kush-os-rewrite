@@ -95,6 +95,7 @@ class PageTable {
         [[nodiscard]] int mapPage(const uint64_t phys, const uintptr_t virt,
                 const Kernel::Vm::Mode mode);
         [[nodiscard]] int unmapPage(const uintptr_t virt);
+        [[nodiscard]] int unmap(const uintptr_t virt, const size_t length);
 
         [[nodiscard]] int getPhysAddr(const uintptr_t virt, uint64_t &outPhys,
                 Kernel::Vm::Mode &outMode);
@@ -107,6 +108,8 @@ class PageTable {
     private:
         void copyPml4Upper(PageTable *);
         void mapPhysAperture();
+
+        [[nodiscard]] int unmapPage(const uintptr_t virt, const bool unmapLargePages);
 
         [[nodiscard]] static uint64_t AllocPage();
 

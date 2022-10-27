@@ -53,7 +53,9 @@ void ContiguousPhysRegion::willRemoveFrom(const uintptr_t base, const size_t siz
         Platform::PageTable &pt) {
     int err;
 
-    // TODO: actually unmap the pages
+    // actually unmap the pages (TODO: check this)
+    err = pt.unmap(base, this->getLength());
+    REQUIRE(!err, "failed to unmap phys region %p from %16llx: %d", this, base, err);
 
     // invalidate tlb
     err = map.invalidateTlb(base, size, TlbInvalidateHint::InvalidateAll |
