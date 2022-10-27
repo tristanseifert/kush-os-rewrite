@@ -289,5 +289,5 @@ int Map::doTlbShootdown(const uintptr_t virtualAddr, const size_t length,
     // TODO: if nobody else has this map active, bail
 
     // TODO: implement
-    return -1;
+    return 0;
 }

@@ -6,6 +6,8 @@
 #include <Logging/Console.h>
 #include <Vm/Map.h>
 
+#include "Vm/PageAllocator.h"
+
 using namespace Kernel;
 
 /**
@@ -44,7 +46,8 @@ void Kernel::Start(Kernel::Vm::Map *map) {
     REQUIRE(map, "invalid kernel memory map");
     Vm::Map::gKernelMap = map;
 
-    // TODO: set up secondary allocators
+    // set up secondary allocators
+    Vm::PageAllocator::Init();
 
     // TODO: initialize handle, object and syscall managers
 

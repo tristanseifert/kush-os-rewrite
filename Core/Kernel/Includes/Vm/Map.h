@@ -37,6 +37,7 @@ class MapEntry;
  */
 class Map: public Runtime::RefCountable<Map> {
     friend class MapEntry;
+    friend class PageAllocator;
     friend void ::Kernel::Start(Kernel::Vm::Map *);
 
 

@@ -1,6 +1,7 @@
 #include "Vm/Manager.h"
 #include "Vm/Map.h"
 #include "Vm/MapEntry.h"
+#include "Vm/PageAllocator.h"
 
 #include "Exceptions/Handler.h"
 #include "Logging/Console.h"
@@ -42,6 +43,18 @@ void Manager::HandleFault(Platform::ProcessorState &state, const uintptr_t fault
 
     // translate fault type
     Platform::PageTable::DecodePageFault(state, type);
+
+    // is fault in the virtual page allocator or heap region?
+    if(faultAddr >= Platform::KernelAddressLayout::VAllocStart &&
+            faultAddr <= Platform::KernelAddressLayout::VAllocEnd) {
+        err = PageAllocator::HandleFault(state, faultAddr, type);
+        if(err == 1) {
+            return;
+        } else if(err < 0) {
+            // TODO: this shouldn't happen (?)
+            PANIC("PageAllocator::HandleFault (%p) failed: %d", faultAddr, err);
+        }
+    }
 
     // check the map entry corresponding to this fault
     auto map = Map::Current();

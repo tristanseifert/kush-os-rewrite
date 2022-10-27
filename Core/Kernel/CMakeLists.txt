@@ -38,6 +38,7 @@ add_executable(Kernel
     Sources/Vm/Map.cpp
     Sources/Vm/MapEntry.cpp
     Sources/Vm/ContiguousPhysRegion.cpp
+    Sources/Vm/PageAllocator.cpp
     ${BuildInfoFile}
 )
 
