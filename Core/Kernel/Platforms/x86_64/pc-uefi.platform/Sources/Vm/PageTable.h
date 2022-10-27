@@ -85,13 +85,19 @@ class PageTable {
          * @brief Round up a size to the nearest page multiple
          */
         constexpr static inline size_t NearestPageSize(const size_t in) {
-            return in + (PageSize() - (in % PageSize()));
+            if(in % PageSize()) {
+                return in + (PageSize() - (in % PageSize()));
+            } else {
+                return in;
+            }
         }
 
         [[nodiscard]] int mapPage(const uint64_t phys, const uintptr_t virt,
                 const Kernel::Vm::Mode mode);
         [[nodiscard]] int unmapPage(const uintptr_t virt);
 
+        [[nodiscard]] int getPhysAddr(const uintptr_t virt, uint64_t &outPhys,
+                Kernel::Vm::Mode &outMode);
         [[nodiscard]] int invalidateTlb(const uintptr_t virt, const size_t length,
                 const Kernel::Vm::TlbInvalidateHint hints);
 
@@ -108,6 +114,8 @@ class PageTable {
         static void WriteTable(const uintptr_t tableBase, const size_t offset, const uint64_t val);
 
         static uint64_t *GetTableVmAddr(const uint64_t base);
+
+        static void DecodePTE(const uint64_t pte, uint64_t &outPhys, Kernel::Vm::Mode &outMode);
 
     private:
         /// Physical address of PML4

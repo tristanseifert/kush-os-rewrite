@@ -63,6 +63,17 @@ class Map: public Runtime::RefCountable<Map> {
             return Platform::ProcessorLocals::GetKernelData()->map;
         }
 
+        /**
+         * @brief Get kernel map
+         *
+         * Retrieve the map corresponding to the kernel's virtual address space. All subsequently
+         * allocated maps will use the kernel map for the upper (kernel) part of its address
+         * space.
+         */
+        inline static Map *Kernel() {
+            return gKernelMap;
+        }
+
         [[nodiscard]] int invalidateTlb(const uintptr_t virtualAddr, const size_t length,
                 const TlbInvalidateHint hints);
 

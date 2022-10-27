@@ -275,6 +275,92 @@ int PageTable::mapPage(const uint64_t phys, const uintptr_t _virt, const Kernel:
 
 
 /**
+ * @brief Resolve a virtual address to physical
+ *
+ * Get the physical address that corresponds to the given virtual address by traversing the page
+ * tables the same way the processor's MMU would. The provided physical address _does_ have any
+ * in-page offsets applied.
+ *
+ * @param _virt Virtual address to look up
+ * @param outPhys Variable to receive the corresponding physical address
+ * @param outMode Access permissions of the page
+ *
+ * @return 0 if the address is unmapped, 1 if it was mapped, or a negative error code.
+ */
+int PageTable::getPhysAddr(const uintptr_t _virt, uint64_t &outPhys, Kernel::Vm::Mode &outMode) {
+    // ensure virtual address is canonical
+    if(_virt > 0x00007FFFFFFFFFFF && _virt < 0xFFFF800000000000) {
+        // TODO: error code enum
+        return -1;
+    }
+
+     /*
+     * Step through the PML4, PDPT, PDT, and eventually locate the address of the page table in
+     * physical memory. If needed, we'll allocate pages for all of these. If there exists a mapping
+     * for a larger page (for example, a 2M page in place of a page table pointer) we'll fail out.
+     */
+    const auto virt = _virt & 0xFFFFFFFFFFFF;
+
+    // read the PML4 entry
+    const auto pml4eIdx = (virt >> 39) & 0x1FF;
+    auto pml4e = ReadTable(this->pml4Phys, pml4eIdx);
+
+    // PDPT not present
+    if(!(pml4e & (1 << 0))) {
+        return 0;
+    }
+
+    // read the PDPT entry
+    const auto pdptAddr = (pml4e & ~0xFFF) & ~static_cast<uintptr_t>(PageFlags::FlagsMask);
+
+    auto pdpte = ReadTable(pdptAddr, (virt >> 30) & 0x1FF);
+
+    // no page mapped here
+    if(!(pdpte & (1 << 0))) {
+        return 0;
+    }
+    // a 1G page is mapped
+    else if(pdpte & (1 << 7)) {
+        DecodePTE(pdpte, outPhys, outMode);
+        outPhys &= ~0x3FFFFFFF;
+        outPhys += (_virt & 0x3FFFFFFF);
+        return 0;
+    }
+
+    // read the page directory entry to find page table
+    const auto pdtAddr = (pdpte & ~0xFFF) & ~static_cast<uintptr_t>(PageFlags::FlagsMask);
+    auto pdte = ReadTable(pdtAddr, (virt >> 21) & 0x1FF);
+
+    // no page table mapped
+    if(!(pdte & (1 << 0))) {
+        return 0;
+    }
+    // a 2M page is mapped
+    else if(pdte & (1 << 7)) {
+        DecodePTE(pdte, outPhys, outMode);
+        outPhys &= ~0x1FFFFF;
+        outPhys += (_virt & 0x1FFFFF);
+        return 0;
+    }
+
+    const auto ptAddr = (pdte & ~0xFFF) & ~static_cast<uintptr_t>(PageFlags::FlagsMask);
+
+    // lastly, read the page table entry
+    auto pte = ReadTable(ptAddr, (virt >> 12) & 0x1FF);
+
+    if(!(pte & (1 << 0))) {
+        return 0;
+    }
+
+    // decode the page information
+    DecodePTE(pte, outPhys, outMode);
+    outPhys += (_virt & 0xFFF);
+
+    return 1;
+}
+
+
+/**
  * @brief Invalidate a range of virtual memory
  *
  * Invalidate the TLB for all addresses in the specified range.
@@ -368,6 +454,45 @@ void PageTable::WriteTable(const uintptr_t tableBase, const size_t offset, const
 
     auto ptr = GetTableVmAddr(tableBase);
     ptr[offset] = val;
+}
+
+/**
+ * @brief Decode a page table entry
+ *
+ * All PTE's on x86 are symmetric, e.g. the physical address and flags are stored in the same
+ * general area of the descriptor.
+ *
+ * @param pte Page table entry
+ * @param outPhys Output for physical address
+ * @param outMode Output for access mode
+ */
+void PageTable::DecodePTE(const uint64_t pte, uint64_t &outPhys, Kernel::Vm::Mode &outMode) {
+    using Mode = Kernel::Vm::Mode;
+    Mode temp{Mode::None};
+
+    outPhys = (pte & 0xFFFFFFFFFF000);
+
+    if(pte & (1 << 2)) { // user mode
+        if(pte & (1 << 1)) { // writes allowed
+            temp |= Mode::UserRW;
+        } else {
+            temp |= Mode::UserRead;
+        }
+        if(!(pte & (1ULL << 63ULL))) {
+            temp |= Mode::UserExec;
+        }
+    } else { // kernel mode
+        if(pte & (1 << 1)) { // writes allowed
+            temp |= Mode::KernelRW;
+        } else {
+            temp |= Mode::KernelRead;
+        }
+        if(!(pte & (1ULL << 63ULL))) {
+            temp |= Mode::KernelExec;
+        }
+    }
+
+    outMode = temp;
 }
 
 

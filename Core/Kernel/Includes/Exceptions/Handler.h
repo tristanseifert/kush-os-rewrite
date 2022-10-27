@@ -54,7 +54,8 @@ class Handler {
         static void Dispatch(const ExceptionType type, Platform::ProcessorState &state,
                 void *auxData = nullptr);
         [[noreturn]] static void AbortWithException(const ExceptionType type,
-                Platform::ProcessorState &state, void *auxData = nullptr);
+                Platform::ProcessorState &state, void *auxData = nullptr,
+                const char *why = nullptr);
 };
 }
 

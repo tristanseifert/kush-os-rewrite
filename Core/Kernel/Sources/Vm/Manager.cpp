@@ -59,7 +59,7 @@ void Manager::HandleFault(Platform::ProcessorState &state, const uintptr_t fault
         // error while handling fault
         else if(err < 0) {
             // TODO: this shouldn't happen (?)
-            PANIC("Map::handleFault failed: %d", err);
+            PANIC("Map::handleFault (%p) failed: %d", faultAddr, err);
         }
     }
 

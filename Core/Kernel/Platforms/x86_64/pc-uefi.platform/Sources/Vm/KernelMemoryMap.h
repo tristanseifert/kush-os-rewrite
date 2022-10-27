@@ -54,6 +54,29 @@ enum KernelAddressLayout: uintptr_t {
     /// End of the kernel file image
     KernelImageEnd                                      = 0xffff'8200'41ff'0000,
 
+
+
+    /**
+     * @brief Virtual allocator region
+     *
+     * The virtual alocator allows kernel components to allocate whole pages of virtual memory. It
+     * is used to back slab allocators, among other things.
+     *
+     * Currently, this region is 1TB in size.
+     */
+    VAllocStart                                         = 0xffff'9000'0000'0000,
+    /// End of the virtual allocator region
+    VAllocEnd                                           = 0xffff'90ff'ffff'ffff,
+
+    /**
+     * @brief Kernel heap
+     *
+     * General purpose allocations are satisfied from the general kernel heap.
+     */
+    KernelHeapStart                                     = 0xffff'9800'0000'0000,
+    /// End of the kernel heap region
+    KernelHeapEnd                                       = 0xffff'98ff'ffff'ffff,
+
     /**
      * @brief Kernel executable start
      *

@@ -21,7 +21,7 @@ class PhysicalMap {
          * Indicates early boot is over, and the basic VM subsystem is available.
          */
         static void FinishedEarlyBoot() {
-            gIsEarlyBoot = true;
+            gIsEarlyBoot = false;
         }
 
         /**
