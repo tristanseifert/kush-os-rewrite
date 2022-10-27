@@ -37,18 +37,29 @@ void Manager::Init() {
  * @param faultAddr Faulting virtual address
  */
 void Manager::HandleFault(Platform::ProcessorState &state, const uintptr_t faultAddr) {
-    int found;
-    MapEntry *entry{nullptr};
+    int err;
+    FaultAccessType type{0};
+
+    // translate fault type
+    Platform::PageTable::DecodePageFault(state, type);
 
     // check the map entry corresponding to this fault
-    auto vm = Map::Current();
-    if(vm) {
-        found = vm->getEntryAt(faultAddr, entry);
-        if(found == 1) {
-            // TODO: invoke handleFault()
-        } else if(found < 0) {
+    auto map = Map::Current();
+    if(map) {
+        err = map->handleFault(state, faultAddr, type);
+
+        // fault was handled
+        if(err == 1) {
+            return;
+        }
+        // forward to task fault handler
+        else if(err == 0) {
+            // TODO: implement this
+        }
+        // error while handling fault
+        else if(err < 0) {
             // TODO: this shouldn't happen (?)
-            PANIC("Map::getEntryAt failed: %d", found);
+            PANIC("Map::handleFault failed: %d", err);
         }
     }
 

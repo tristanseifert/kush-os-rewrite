@@ -330,7 +330,7 @@ uint64_t *PageTable::GetTableVmAddr(const uint64_t phys) {
 uint64_t PageTable::AllocPage() {
     // try to allocate page
     uint64_t page;
-    int err = Kernel::PhysicalAllocator::AllocatePages(1, &page);
+    int err = Kernel::PhysicalAllocator::AllocatePage(page);
     REQUIRE(err == 1, "failed to allocate page: %d", err);
 
     // zeroize it
@@ -368,4 +368,52 @@ void PageTable::WriteTable(const uintptr_t tableBase, const size_t offset, const
 
     auto ptr = GetTableVmAddr(tableBase);
     ptr[offset] = val;
+}
+
+
+
+/**
+ * @brief Decode a page fault exception frame
+ *
+ * Read the error code from the stack frame and decode it per the page fault exception as specified
+ * in the Intel manual, section 3A 4.7.
+ */
+void PageTable::DecodePageFault(const ProcessorState &state,
+        Kernel::Vm::FaultAccessType &outMode) {
+    using Mode = Kernel::Vm::FaultAccessType;
+
+    Mode m{0};
+
+    // page present flag
+    if(state.errorCode & (1 << 0)) {
+        m |= Mode::ProtectionViolation;
+    } else {
+        m |= Mode::PageNotPresent;
+    }
+
+    // read/write
+    if(state.errorCode & (1 << 1)) {
+        m |= Mode::Write;
+    } else {
+        m |= Mode::Read;
+    }
+
+    // privilege
+    if(state.errorCode & (1 << 2)) {
+        m |= Mode::User;
+    } else {
+        m |= Mode::Supervisor;
+    }
+
+    // reserved bit violation -> invalid descriptor
+    if(state.errorCode & (1 << 3)) {
+        m |= Mode::InvalidPTE;
+    }
+
+    // instruction fetch bit
+    if(state.errorCode & (1 << 4)) {
+        m |= Mode::InstructionFetch;
+    }
+
+    outMode = m;
 }

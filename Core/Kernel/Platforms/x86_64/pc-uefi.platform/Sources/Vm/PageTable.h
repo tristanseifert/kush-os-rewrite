@@ -6,6 +6,7 @@
 
 #include <Bitflags.h>
 #include <Vm/Types.h>
+#include <Platform/Processor.h>
 
 namespace Platform::Amd64Uefi {
 /**
@@ -87,17 +88,21 @@ class PageTable {
             return in + (PageSize() - (in % PageSize()));
         }
 
-        int mapPage(const uint64_t phys, const uintptr_t virt,
+        [[nodiscard]] int mapPage(const uint64_t phys, const uintptr_t virt,
                 const Kernel::Vm::Mode mode);
+        [[nodiscard]] int unmapPage(const uintptr_t virt);
 
-        int invalidateTlb(const uintptr_t virt, const size_t length,
+        [[nodiscard]] int invalidateTlb(const uintptr_t virt, const size_t length,
                 const Kernel::Vm::TlbInvalidateHint hints);
+
+        static void DecodePageFault(const ProcessorState &state,
+                Kernel::Vm::FaultAccessType &outMode);
 
     private:
         void copyPml4Upper(PageTable *);
         void mapPhysAperture();
 
-        static uint64_t AllocPage();
+        [[nodiscard]] static uint64_t AllocPage();
 
         static uint64_t ReadTable(const uintptr_t tableBase, const size_t offset);
         static void WriteTable(const uintptr_t tableBase, const size_t offset, const uint64_t val);

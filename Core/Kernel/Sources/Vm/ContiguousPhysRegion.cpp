@@ -42,3 +42,21 @@ void ContiguousPhysRegion::addedTo(const uintptr_t base, Map &map, Platform::Pag
     }
 }
 
+/**
+ * @brief Remove all page table entries for this region
+ *
+ * @param base Virtual base address
+ * @param map VM map to add to
+ * @param pt Physical page tables backing the map, these are modified
+ */
+void ContiguousPhysRegion::willRemoveFrom(const uintptr_t base, const size_t size, Map &map,
+        Platform::PageTable &pt) {
+    int err;
+
+    // TODO: actually unmap the pages
+
+    // invalidate tlb
+    err = map.invalidateTlb(base, size, TlbInvalidateHint::InvalidateAll |
+            TlbInvalidateHint::Unmapped);
+    REQUIRE(!err, "failed to invalidate tlb: %d", err);
+}

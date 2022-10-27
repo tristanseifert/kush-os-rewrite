@@ -8,6 +8,7 @@
 #include <Runtime/RefCountable.h>
 #include <Vm/Types.h>
 #include <platform/PageTable.h>
+#include <platform/Processor.h>
 
 namespace Kernel::Vm {
 class MapEntry;
@@ -62,13 +63,21 @@ class Map: public Runtime::RefCountable<Map> {
             return nullptr;
         }
 
+        [[nodiscard]] int invalidateTlb(const uintptr_t virtualAddr, const size_t length,
+                const TlbInvalidateHint hints);
+
+        [[nodiscard]] int handleFault(Platform::ProcessorState &state, const uintptr_t faultAddr,
+                const FaultAccessType accessType);
+
     private:
         void deactivate();
 
-        int findEntry(MapEntry *entry, uintptr_t &outVirtBase);
-        int invalidateTlb(const uintptr_t virtualAddr, const size_t length,
-                const TlbInvalidateHint hints);
-        int doTlbShootdown(const uintptr_t virtualAddr, const size_t length,
+        [[nodiscard]] int findEntry(MapEntry *entry, uintptr_t &outVirtBase,
+                size_t &outSize);
+        [[nodiscard]] int getEntryAt(const uintptr_t vaddr, MapEntry* &outEntry,
+                uintptr_t &outEntryBase, size_t &outEntrySize);
+
+        [[nodiscard]] int doTlbShootdown(const uintptr_t virtualAddr, const size_t length,
                 const TlbInvalidateHint hints);
 
     private:

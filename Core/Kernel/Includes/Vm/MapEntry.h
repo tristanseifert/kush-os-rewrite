@@ -70,8 +70,9 @@ class MapEntry: public Runtime::RefCountable<MapEntry> {
          *
          * @return 0 to resume execution, any other code to propagate the page fault
          */
-        virtual int handleFault(Map &map, const uintptr_t virtualAddr, const Mode mode) {
-            return -1;
+        virtual int handleFault(Map &map, const uintptr_t virtualAddr,
+                const FaultAccessType mode) {
+            return 0;
         }
 
     protected:
@@ -88,10 +89,12 @@ class MapEntry: public Runtime::RefCountable<MapEntry> {
          * @brief Callback invoked when the map entry is about to be unmapped
          *
          * @param base Virtual base address of this object's mapping
+         * @param size Length of the mapping, in bytes
          * @param map VM map object that we're being unmapped from
          * @param pt Page table backing the VM map
          */
-        virtual void willRemoveFrom(const uintptr_t base, Map &map, Platform::PageTable &pt) = 0;
+        virtual void willRemoveFrom(const uintptr_t base, const size_t size, Map &map,
+                Platform::PageTable &pt) = 0;
 
         ~MapEntry() = default;
 

@@ -47,6 +47,42 @@ enum class Mode: uintptr_t {
 ENUM_FLAGS_EX(Mode, uintptr_t);
 
 /**
+ * @brief Page fault access type
+ *
+ * Defines the kind of access that led to a page fault.
+ *
+ * @remark Only the present, read/write, user/supervisor flags are guaranteed to be available in
+ *         all situations.
+ */
+enum class FaultAccessType: uintptr_t {
+    /// Mask for operation type
+    MaskType                            = (0x03 << 0),
+    /// A read access triggered the fault
+    Read                                = (0x01 << 0),
+    /// A write access triggered the fault
+    Write                               = (0x02 << 0),
+
+    /// Mask for access privilege
+    MaskPrivilege                       = (0x03 << 4),
+    /// Supervisor access caused the fault
+    Supervisor                          = (0x01 << 4),
+    /// User access caused the fault
+    User                                = (0x02 << 4),
+
+    /// Mask for the fault source
+    MaskSource                          = (0xff << 8),
+    /// Page is not present
+    PageNotPresent                      = (1 << 8),
+    /// Protection mode violation
+    ProtectionViolation                 = (1 << 9),
+    /// Invalid page table entry
+    InvalidPTE                          = (1 << 10),
+    /// Fault encountered during code access
+    InstructionFetch                    = (1 << 11),
+};
+ENUM_FLAGS_EX(FaultAccessType, uintptr_t);
+
+/**
  * @brief Hints for a TLB invalidation operation
  *
  * Hints may be combined (via bitwise OR) to affect the behavior of a TLB invalidation. They

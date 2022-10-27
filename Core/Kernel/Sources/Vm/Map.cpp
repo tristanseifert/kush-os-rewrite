@@ -134,8 +134,8 @@ int Map::remove(MapEntry *entry) {
 
     // TODO: acquire write lock (naiive, but whatever)
 
-    // find entry and notify we're unmapping
-    err = this->findEntry(entry, virtBase);
+    // find entry
+    err = this->findEntry(entry, virtBase, regionSize);
     if(!err) {
         // TODO: standardized error codes
         return -1;
@@ -143,23 +143,12 @@ int Map::remove(MapEntry *entry) {
         return err;
     }
 
-    regionSize = entry->getLength();
-
-    entry->willRemoveFrom(virtBase, *this, this->pt);
-
-    // TODO: unmap its entire range
+    // invoke its callback: this shall unmap pages and invalidate TLBs
+    entry->willRemoveFrom(virtBase, regionSize, *this, this->pt);
 
     // TODO: clean up (remove from list, etc)
 
     entry->release();
-
-    // invalidate the address range (local + remote)
-    err = this->invalidateTlb(virtBase, regionSize, TlbInvalidateHint::InvalidateAll |
-            TlbInvalidateHint::Unmapped);
-    if(err < 0) {
-        // TODO: will this fail the entire operation?
-        return err;
-    }
 
     // TODO implement
     return -1;
@@ -170,15 +159,59 @@ int Map::remove(MapEntry *entry) {
  *
  * @param vaddr Virtual address to search for an entry for
  * @param outEntry If found, a pointer to the entry (you _must_ release it when done!)
+ * @param outEntryBase Base address of the entry in this map
+ * @param outEntrySize Size of the entry (in bytes)
  *
  * @return 1 if found, 0 if not found, or a negative error code
  *
  * Locates a map entry that corresponds to the specified virtual address. The address is
  * understood to be a single byte.
  */
-int Map::getEntryAt(const uintptr_t vaddr, MapEntry* &outEntry) {
+int Map::getEntryAt(const uintptr_t vaddr, MapEntry* &outEntry, uintptr_t &outEntryBase,
+        size_t &outEntrySize) {
     // TODO: implement
     return -1;
+}
+
+/**
+ * @brief Service a page fault
+ *
+ * @param state Current processor state
+ * @param address Virtual address of the fault
+ * @param accessType Type of memory access that triggered the fault
+ *
+ * @return 1 if fault is handled, 0 if the next handler should be tried, or a negative error.
+ */
+int Map::handleFault(Platform::ProcessorState &state, const uintptr_t address,
+        const FaultAccessType accessType) {
+    int err;
+    MapEntry *entry{nullptr};
+    size_t entrySize{0};
+    uintptr_t entryBase{0};
+
+    // get the corresponding VM entry
+    err = this->getEntryAt(address, entry, entryBase, entrySize);
+
+    if(err == 0) { // not found
+        return 0;
+    } else if(err < 0) { // error
+        return err;
+    }
+
+    // invoke the entry's handler
+    const uintptr_t offset = entryBase - address;
+    REQUIRE(offset <= entrySize, "invalid fault offset: base %p fault %p", entryBase, address);
+
+    err = entry->handleFault(*this, offset, accessType);
+    entry->release();
+
+    if(err == 0) { // successfully handled
+        return 1;
+    } else if(err < 0) { // error
+        return err;
+    } else { // otherwise, try the next handler
+        return 0;
+    }
 }
 
 
@@ -190,10 +223,11 @@ int Map::getEntryAt(const uintptr_t vaddr, MapEntry* &outEntry) {
  *
  * @param entry Entry to search for
  * @param outVirtBase Base virtual address of the entry in this map
+ * @param outSize Number of bytes of outSize that are mapped
  *
  * @return 1 if entry is found in this map, 0 if not found, or a negative error code.
  */
-int Map::findEntry(MapEntry *entry, uintptr_t &outVirtBase) {
+int Map::findEntry(MapEntry *entry, uintptr_t &outVirtBase, size_t &outSize) {
     // TODO: implement
     return -1;
 }
@@ -211,6 +245,8 @@ int Map::findEntry(MapEntry *entry, uintptr_t &outVirtBase) {
  */
 int Map::invalidateTlb(const uintptr_t virtualAddr, const size_t length,
         const TlbInvalidateHint hints) {
+    int err;
+
     // test inputs
     if(!TestFlags(hints & TlbInvalidateHint::MaskInvalidate)) {
         // TODO: indicate API misuse?
@@ -219,16 +255,21 @@ int Map::invalidateTlb(const uintptr_t virtualAddr, const size_t length,
 
     // invalidate local caches, if requested
     if(TestFlags(hints & TlbInvalidateHint::InvalidateLocal)) {
-        this->pt.invalidateTlb(virtualAddr, length, hints);
+        err = this->pt.invalidateTlb(virtualAddr, length, hints);
+        if(err < 0) {
+            return err;
+        }
     }
 
     // invalidate remote caches, if requested
     if(TestFlags(hints & TlbInvalidateHint::InvalidateRemote)) {
-        this->doTlbShootdown(virtualAddr, length, hints);
+        err = this->doTlbShootdown(virtualAddr, length, hints);
+        if(err < 0) {
+            return err;
+        }
     }
 
-    // TODO: implement
-    return -1;
+    return 0;
 }
 
 /**

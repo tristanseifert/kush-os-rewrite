@@ -37,8 +37,28 @@ class PhysicalAllocator {
                 const size_t numExtraSizes, const size_t numBonusPools = 0);
         static void AddRegion(const uintptr_t base, const size_t length, const size_t pool = 0);
 
+        /**
+         * @brief Allocate a single page
+         *
+         * @param outPageAddress Output of the physical address of the page
+         *
+         * @return 1 if the page was successfully allocated
+         */
+        static inline int AllocatePage(uintptr_t &outPageAddress) {
+            return AllocatePages(1, &outPageAddress);
+        }
         static int AllocatePages(const size_t numPages, uintptr_t *outPageAddrs,
                 const size_t pool = 0);
+        /**
+         * @brief Free a single page
+         *
+         * @param pageAddress Physical address of the page to free
+         *
+         * @return 1 if the page was successfully freed
+         */
+        static inline int FreePage(const uintptr_t pageAddress) {
+            return FreePages(1, &pageAddress);
+        }
         static int FreePages(const size_t numPages, const uintptr_t *inPageAddrs,
                 const size_t pool = 0);
 
