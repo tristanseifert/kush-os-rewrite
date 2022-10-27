@@ -12,6 +12,7 @@ add_library(platform-amd64-uefi OBJECT
     Sources/Arch/GdtHelpers.S
     Sources/Arch/Idt.cpp
     Sources/Arch/Processor.cpp
+    Sources/Arch/ProcessorLocals.cpp
     Sources/Io/Console.cpp
     Sources/Util/Backtrace.cpp
     Sources/Memory/PhysicalMap.cpp

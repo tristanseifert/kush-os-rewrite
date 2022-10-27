@@ -9,6 +9,7 @@
 #include <Vm/Types.h>
 #include <platform/PageTable.h>
 #include <platform/Processor.h>
+#include <platform/ProcessorLocals.h>
 
 namespace Kernel::Vm {
 class MapEntry;
@@ -59,8 +60,7 @@ class Map: public Runtime::RefCountable<Map> {
          * @return Map object currently active, if any
          */
         inline static Map *Current() {
-            // TODO: implement :)
-            return nullptr;
+            return Platform::ProcessorLocals::GetKernelData()->map;
         }
 
         [[nodiscard]] int invalidateTlb(const uintptr_t virtualAddr, const size_t length,

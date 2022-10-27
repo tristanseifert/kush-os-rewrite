@@ -58,10 +58,11 @@ void Map::activate() {
             last->deactivate();
         }
 
+        // TODO: update mapped bitmap
+
         // switch to our page tables
         this->pt.activate();
-
-        // TODO: update mapped bitmap
+        Platform::ProcessorLocals::GetKernelData()->map = this;
     }
 
     // TODO: invoke post-mapping callback

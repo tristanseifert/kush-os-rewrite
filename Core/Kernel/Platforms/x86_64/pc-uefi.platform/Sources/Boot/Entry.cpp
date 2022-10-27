@@ -29,6 +29,7 @@
 #include "Arch/Gdt.h"
 #include "Arch/Idt.h"
 #include "Arch/Processor.h"
+#include "Arch/ProcessorLocals.h"
 #include "Memory/PhysicalMap.h"
 #include "Io/Console.h"
 #include "Util/Backtrace.h"
@@ -123,6 +124,9 @@ extern "C" void _osentry() {
 
     // prepare a few internal components
     Console::PrepareForVm(map);
+
+    // finish BSP initialization
+    ProcessorLocals::InitBsp();
 
     // then activate the map
     map->activate();

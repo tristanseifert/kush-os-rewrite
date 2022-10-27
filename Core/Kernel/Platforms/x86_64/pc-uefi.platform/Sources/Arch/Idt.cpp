@@ -12,7 +12,7 @@ using namespace Platform::Amd64Uefi;
 
 // allocate storage for the BSP IDT
 static uint8_t KUSH_ALIGNED(64) gBspIdtBuf[sizeof(Idt)];
-static Idt *gBspIdt{nullptr};
+Idt *Idt::gBspIdt{nullptr};
 
 /**
  * Initialize the bootstrap processor (the current CPU) IDT.

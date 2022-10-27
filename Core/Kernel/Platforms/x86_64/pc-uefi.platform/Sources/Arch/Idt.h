@@ -15,6 +15,8 @@ namespace Platform::Amd64Uefi {
  * kernel's generic exception handler.
  */
 class Idt {
+    friend class ProcessorLocals;
+
     public:
         /// Definitions of which interrupt stacks to use for an interrupt routine
         enum class Stack: uint8_t {
@@ -69,8 +71,10 @@ class Idt {
         void load();
 
     private:
+        static Idt *gBspIdt;
+
         /// IDT entries
-        IdtEntry storage[kNumIdt] __attribute__((aligned(64)));
+        IdtEntry storage[kNumIdt] KUSH_ALIGNED(64);
 
         /// Whether all writers to the IDT are logged
         constexpr static const bool kLogSet{false};
