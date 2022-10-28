@@ -7,12 +7,15 @@
 #include <Init.h>
 #include <Runtime/RefCountable.h>
 #include <Vm/Types.h>
+#include <Vm/ZoneAllocator.h>
 #include <platform/PageTable.h>
 #include <platform/Processor.h>
 #include <platform/ProcessorLocals.h>
 
 namespace Kernel::Vm {
 class MapEntry;
+
+constexpr static const char kMapAllocatorName[] = "VM Maps";
 
 /**
  * @brief Virtual memory map
@@ -35,7 +38,7 @@ class MapEntry;
  *    map is set up) so this caveat does not apply to early platform/arch init code; though that
  *    code should really only ever be creating one instance (the initial kernel map) anyways.
  */
-class Map: public Runtime::RefCountable<Map> {
+class Map: public WithZoneAllocation<Map, kMapAllocatorName>, public Runtime::RefCountable<Map> {
     friend class MapEntry;
     friend class PageAllocator;
     friend void ::Kernel::Start(Kernel::Vm::Map *);

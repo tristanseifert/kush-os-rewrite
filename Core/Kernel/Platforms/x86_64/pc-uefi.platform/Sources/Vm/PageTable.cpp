@@ -51,7 +51,8 @@ PageTable::PageTable(PageTable *parent) {
  * which is then freed also.
  */
 PageTable::~PageTable() {
-    REQUIRE(false, "not implemented");
+    // TODO: implement (release all lower page tables)
+    Kernel::Console::Warning("%s(%p) unimplemented!", __FUNCTION__, this);
 
     // release PML4
     Kernel::PhysicalAllocator::FreePages(1, &this->pml4Phys);

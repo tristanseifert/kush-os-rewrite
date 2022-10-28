@@ -6,6 +6,7 @@
 #include <Logging/Console.h>
 #include <Vm/Map.h>
 
+#include "Vm/ContiguousPhysRegion.h"
 #include "Vm/PageAllocator.h"
 
 using namespace Kernel;
@@ -16,8 +17,18 @@ using namespace Kernel;
 static void PrintBanner() {
     Console::Notice("Welcome to \x1b[31mk\x1b[33mu\x1b[93ms\x1b[32mh\x1b[34m-"
             "\x1b[35mo\x1b[31ms\x1b[0m! Copyright 2022: Tristan Seifert");
-    Console::Notice("Rev %s@%s, built %s for platform %s-%s", gBuildInfo.gitHash,
+    Console::Notice("Rev %s@%s, built %s for platform %s-%s\n", gBuildInfo.gitHash,
             gBuildInfo.gitBranch, gBuildInfo.buildDate, gBuildInfo.arch, gBuildInfo.platform);
+}
+
+/**
+ * @Brief Initialize memory allocators
+ */
+static void InitAllocators() {
+    Vm::PageAllocator::Init();
+
+    Vm::Map::InitZone();
+    Vm::ContiguousPhysRegion::InitZone();
 }
 
 /**
@@ -42,12 +53,12 @@ static void PrintBanner() {
 void Kernel::Start(Kernel::Vm::Map *map) {
     PrintBanner();
 
-    // perform tweaks to kernel VM map
+    // finish setting up virtual memory system
     REQUIRE(map, "invalid kernel memory map");
     Vm::Map::gKernelMap = map;
 
-    // set up secondary allocators
-    Vm::PageAllocator::Init();
+    InitAllocators();
+
 
     // TODO: initialize handle, object and syscall managers
 

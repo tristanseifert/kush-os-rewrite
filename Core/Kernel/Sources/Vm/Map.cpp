@@ -149,6 +149,7 @@ int Map::remove(MapEntry *entry) {
 
     // TODO: clean up (remove from list, etc)
 
+    // TODO: implement destructor/allocation for entries
     entry->release();
 
     // TODO implement

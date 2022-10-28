@@ -37,7 +37,7 @@ class RefCountable {
          */
         T *release() {
             if(!__atomic_sub_fetch(&this->refCount, 1, __ATOMIC_RELEASE)) {
-                delete this;
+                delete static_cast<T *>(this);
                 return nullptr;
             }
             return static_cast<T *>(this);

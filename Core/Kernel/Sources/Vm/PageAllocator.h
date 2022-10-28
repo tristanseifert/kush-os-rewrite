@@ -23,8 +23,8 @@ class PageAllocator {
         static void Free(void *ptr, const size_t length);
 
     private:
-        constexpr static const bool kLogAlloc{true};
-        constexpr static const bool kLogFrees{true};
+        constexpr static const bool kLogAlloc{false};
+        constexpr static const bool kLogFrees{false};
 
         /**
          * @brief Number of guard pages to insert between allocations

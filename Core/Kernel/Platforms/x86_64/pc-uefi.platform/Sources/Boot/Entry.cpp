@@ -120,6 +120,8 @@ extern "C" void _osentry() {
     InitPhysAllocator();
 
     auto map = InitKernelVm();
+    REQUIRE(map, "failed to initialize kernel map");
+
     PopulateKernelVm(map);
 
     // prepare a few internal components
@@ -229,11 +231,7 @@ static Kernel::Vm::Map *InitKernelVm() {
 
     // create the kernel map
     static KUSH_ALIGNED(64) uint8_t gKernelMapBuf[sizeof(Kernel::Vm::Map)];
-    auto ptr = reinterpret_cast<Kernel::Vm::Map *>(&gKernelMapBuf);
-
-    new(ptr) Kernel::Vm::Map();
-
-    return ptr;
+    return new(gKernelMapBuf) Kernel::Vm::Map();
 }
 
 /**

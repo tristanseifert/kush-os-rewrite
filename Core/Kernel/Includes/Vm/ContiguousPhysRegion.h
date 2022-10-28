@@ -2,8 +2,11 @@
 #define KERNEL_VM_CONTIGUOUSPHYSREGION_H
 
 #include <Vm/MapEntry.h>
+#include <Vm/ZoneAllocator.h>
 
 namespace Kernel::Vm {
+constexpr static const char kPhysRegionAllocatorName[] = "ContiguousPhysRegion";
+
 /**
  * @brief A contiguous region of physical memory
  *
@@ -11,7 +14,8 @@ namespace Kernel::Vm {
  * region of virtual address space. This is particularly useful for peripheral devices, MMIO, and
  * actually mapping large swaths of physical address space.
  */
-class ContiguousPhysRegion: public MapEntry {
+class ContiguousPhysRegion: public WithZoneAllocation<ContiguousPhysRegion, kPhysRegionAllocatorName>,
+    public MapEntry {
     public:
         ContiguousPhysRegion(const uint64_t physBase, const size_t length, const Mode mode);
 

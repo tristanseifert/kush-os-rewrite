@@ -26,6 +26,7 @@ class MapEntry: public Runtime::RefCountable<MapEntry> {
 
     public:
         MapEntry(const size_t length, const Mode mode);
+        virtual ~MapEntry() = default;
 
         /**
          * @brief Get the length of the map entry, in bytes.
@@ -95,8 +96,6 @@ class MapEntry: public Runtime::RefCountable<MapEntry> {
          */
         virtual void willRemoveFrom(const uintptr_t base, const size_t size, Map &map,
                 Platform::PageTable &pt) = 0;
-
-        ~MapEntry() = default;
 
     protected:
         /**
